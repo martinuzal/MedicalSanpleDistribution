@@ -203,5 +203,78 @@ namespace MMDistributionSystem.API.Controllers
                 return StatusCode(500, "Error loading filters");
             }
         }
+
+        [HttpGet("{repCode}/history")]
+        public async Task<ActionResult<RepresentativeHistoryDto>> GetRepresentativeHistory(int repCode)
+        {
+            try
+            {
+                var history = new List<RepresentativeHistoryItemDto>();
+                RepresentativeInfoDto? repInfo = null;
+
+                using (var command = _context.Database.GetDbConnection().CreateCommand())
+                {
+                    command.CommandText = "EXEC rpt_EnviadoXRepHistorico @rep";
+                    command.CommandType = System.Data.CommandType.Text;
+
+                    var parameter = command.CreateParameter();
+                    parameter.ParameterName = "@rep";
+                    parameter.Value = repCode;
+                    command.Parameters.Add(parameter);
+
+                    await _context.Database.OpenConnectionAsync();
+
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var item = new RepresentativeHistoryItemDto
+                            {
+                                Code = reader.GetInt32(0),
+                                Representante = reader.IsDBNull(1) ? null : reader.GetString(1),
+                                Supervisor = reader.IsDBNull(2) ? null : reader.GetString(2),
+                                Region = reader.IsDBNull(3) ? null : reader.GetString(3),
+                                Material = reader.IsDBNull(4) ? null : reader.GetString(4),
+                                CodigoSap = reader.IsDBNull(5) ? null : reader.GetString(5),
+                                ImportDate = reader.GetDateTime(6),
+                                State = reader.IsDBNull(7) ? null : reader.GetString(7),
+                                CantEnviar = reader.GetInt32(8)
+                            };
+
+                            history.Add(item);
+
+                            // Get representative info from first record
+                            if (repInfo == null)
+                            {
+                                repInfo = new RepresentativeInfoDto
+                                {
+                                    Code = item.Code,
+                                    Name = item.Representante,
+                                    Supervisor = item.Supervisor,
+                                    Region = item.Region
+                                };
+                            }
+                        }
+                    }
+                }
+
+                if (history.Count == 0)
+                {
+                    return NotFound($"No history found for representative {repCode}");
+                }
+
+                return Ok(new RepresentativeHistoryDto
+                {
+                    History = history,
+                    TotalCount = history.Count,
+                    RepresentativeInfo = repInfo
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error loading history for representative {repCode}");
+                return StatusCode(500, $"Error loading history for representative {repCode}");
+            }
+        }
     }
 }

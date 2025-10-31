@@ -47,3 +47,29 @@ export interface RepresentativesFilters {
   managers: ManagerFilter[];
   businessLines: BusinessLineFilter[];
 }
+
+// Representative History Types
+export interface RepresentativeHistoryItem {
+  code: number;
+  representante: string | null;
+  supervisor: string | null;
+  region: string | null;
+  material: string | null;
+  codigoSap: string | null;
+  importDate: string;
+  state: string | null;
+  cantEnviar: number;
+}
+
+export interface RepresentativeInfo {
+  code: number;
+  name: string | null;
+  supervisor: string | null;
+  region: string | null;
+}
+
+export interface RepresentativeHistory {
+  history: RepresentativeHistoryItem[];
+  totalCount: number;
+  representativeInfo: RepresentativeInfo | null;
+}

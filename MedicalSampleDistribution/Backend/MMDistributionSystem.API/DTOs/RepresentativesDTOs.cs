@@ -56,4 +56,33 @@ namespace MMDistributionSystem.API.DTOs
         public int Code { get; set; }
         public string? Description { get; set; }
     }
+
+    // Representative History DTOs
+    public class RepresentativeHistoryItemDto
+    {
+        public int Code { get; set; }
+        public string? Representante { get; set; }
+        public string? Supervisor { get; set; }
+        public string? Region { get; set; }
+        public string? Material { get; set; }
+        public string? CodigoSap { get; set; }
+        public DateTime ImportDate { get; set; }
+        public string? State { get; set; }
+        public int CantEnviar { get; set; }
+    }
+
+    public class RepresentativeHistoryDto
+    {
+        public List<RepresentativeHistoryItemDto> History { get; set; } = new();
+        public int TotalCount { get; set; }
+        public RepresentativeInfoDto? RepresentativeInfo { get; set; }
+    }
+
+    public class RepresentativeInfoDto
+    {
+        public int Code { get; set; }
+        public string? Name { get; set; }
+        public string? Supervisor { get; set; }
+        public string? Region { get; set; }
+    }
 }

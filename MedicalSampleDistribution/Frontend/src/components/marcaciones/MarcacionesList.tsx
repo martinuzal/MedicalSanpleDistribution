@@ -110,14 +110,15 @@ const MarcacionesList = ({ onEdit, onViewDetail, onDelete, refreshKey }: Marcaci
   return (
     <div className="marcaciones-list-container">
       <div className="filters-section">
-        <div className="filters-grid">
-          <div className="filter-group">
-            <label>Estado</label>
+        <div className="filters-toolbar">
+          <div className="filter-item">
+            <span className="material-icons filter-icon">label</span>
             <select
+              className="filter-select"
               value={filters.state}
               onChange={(e) => setFilters({ ...filters, state: e.target.value, pageNumber: 1 })}
             >
-              <option value="">Todos</option>
+              <option value="">Todos los estados</option>
               <option value="Draft">Borrador</option>
               <option value="InProgress">En Progreso</option>
               <option value="Completed">Completado</option>
@@ -125,48 +126,52 @@ const MarcacionesList = ({ onEdit, onViewDetail, onDelete, refreshKey }: Marcaci
             </select>
           </div>
 
-          <div className="filter-group">
-            <label>Fecha Desde</label>
+          <div className="filter-divider"></div>
+
+          <div className="filter-item">
+            <span className="material-icons filter-icon">calendar_today</span>
             <input
               type="date"
+              className="filter-input"
               value={filters.fromDate}
               onChange={(e) => setFilters({ ...filters, fromDate: e.target.value, pageNumber: 1 })}
+              placeholder="Desde"
             />
           </div>
 
-          <div className="filter-group">
-            <label>Fecha Hasta</label>
+          <div className="filter-item">
+            <span className="material-icons filter-icon">event</span>
             <input
               type="date"
+              className="filter-input"
               value={filters.toDate}
               onChange={(e) => setFilters({ ...filters, toDate: e.target.value, pageNumber: 1 })}
+              placeholder="Hasta"
             />
           </div>
 
-          <div className="filter-group">
+          <div className="filter-divider"></div>
+
+          <div className="filter-item filter-checkbox">
             <label className="checkbox-label">
               <input
                 type="checkbox"
                 checked={filters.hasDistribution === true}
                 onChange={(e) => setFilters({ ...filters, hasDistribution: e.target.checked ? true : undefined, pageNumber: 1 })}
               />
-              <span>Solo con distribución</span>
+              <span className="material-icons checkbox-icon">
+                {filters.hasDistribution ? 'check_box' : 'check_box_outline_blank'}
+              </span>
+              <span>Con distribución</span>
             </label>
           </div>
 
-          <div className="filter-group">
-            <label>&nbsp;</label>
-            <button
-              className="btn btn-secondary"
-              onClick={() => setFilters({ state: '', fromDate: '', toDate: '', hasDistribution: undefined, pageNumber: 1, pageSize: 20 })}
-            >
-              Limpiar Filtros
-            </button>
-          </div>
-        </div>
+          <div className="filter-spacer"></div>
 
-        <div className="results-info">
-          Mostrando {marcaciones.length} de {totalItems} marcaciones
+          <div className="results-info">
+            <span className="material-icons">info</span>
+            <span>{marcaciones.length} / {totalItems}</span>
+          </div>
         </div>
       </div>
 

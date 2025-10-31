@@ -12,6 +12,7 @@ import CoverageDashboardPage from './components/dashboard/CoverageDashboard';
 import MaterialDetailDashboard from './components/dashboard/MaterialDetailDashboard';
 import GeneralDistributionDashboard from './components/dashboard/GeneralDistributionDashboard';
 import RepresentativesList from './components/representatives/RepresentativesList';
+import RepresentativeHistoryDashboard from './pages/representatives/RepresentativeHistoryDashboard';
 import './App.css';
 
 const AppContent = () => {
@@ -28,6 +29,7 @@ const AppContent = () => {
           <Route path="/marcaciones/:id/material/:materialId" element={<MaterialDetailDashboard />} />
           <Route path="/marcaciones/:id/general-distribution" element={<GeneralDistributionDashboard />} />
           <Route path="/representantes" element={<RepresentativesList />} />
+          <Route path="/representantes/:repCode/dashboard" element={<RepresentativeHistoryDashboard />} />
           <Route path="/materiales" element={<MaterialesPage />} />
           <Route path="/stock" element={<StockPage />} />
           <Route path="/distribucion" element={<DistributionPage />} />

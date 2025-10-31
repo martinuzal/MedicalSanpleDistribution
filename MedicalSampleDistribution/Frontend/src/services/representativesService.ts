@@ -1,4 +1,4 @@
-import type { RepresentativesList, RepresentativesFilters } from '../types/representatives';
+import type { RepresentativesList, RepresentativesFilters, RepresentativeHistory } from '../types/representatives';
 
 const API_URL = 'http://localhost:5001/api';
 
@@ -35,6 +35,20 @@ export const representativesService = {
 
   async getFilters(): Promise<RepresentativesFilters> {
     const response = await fetch(`${API_URL}/representatives/filters`, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+  },
+
+  async getRepresentativeHistory(repCode: number): Promise<RepresentativeHistory> {
+    const response = await fetch(`${API_URL}/representatives/${repCode}/history`, {
       headers: {
         'Accept': 'application/json',
       },

@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { representativesService } from '../../services/representativesService';
 import { useNotifications } from '../../contexts/NotificationContext';
 import type { RepresentativeDetail, RepresentativesFilters } from '../../types/representatives';
@@ -12,6 +13,14 @@ interface TreeNode {
   children?: TreeNode[];
   representative?: RepresentativeDetail;
   isExpanded?: boolean;
+  path?: string[]; // Breadcrumb path
+}
+
+interface TreeStats {
+  totalRegions: number;
+  totalDistricts: number;
+  totalManagers: number;
+  totalRepresentatives: number;
 }
 
 export default function RepresentativesList() {
@@ -27,7 +36,13 @@ export default function RepresentativesList() {
   const [filterBusinessLine, setFilterBusinessLine] = useState<number | null>(null);
   const [searchText, setSearchText] = useState('');
 
+  // UI State
+  const [compactView, setCompactView] = useState(false);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+
   const { addNotification } = useNotifications();
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadFilters();
@@ -67,6 +82,30 @@ export default function RepresentativesList() {
     }
   };
 
+  // Calculate tree statistics
+  const treeStats = useMemo<TreeStats>(() => {
+    const regionsSet = new Set<number>();
+    const districtsSet = new Set<string>();
+    const managersSet = new Set<string>();
+
+    representatives.forEach(rep => {
+      if (rep.regionCode) regionsSet.add(rep.regionCode);
+      if (rep.regionCode && rep.districtCode) {
+        districtsSet.add(`${rep.regionCode}-${rep.districtCode}`);
+      }
+      if (rep.regionCode && rep.districtCode && rep.managerCode) {
+        managersSet.add(`${rep.regionCode}-${rep.districtCode}-${rep.managerCode}`);
+      }
+    });
+
+    return {
+      totalRegions: regionsSet.size,
+      totalDistricts: districtsSet.size,
+      totalManagers: managersSet.size,
+      totalRepresentatives: representatives.length
+    };
+  }, [representatives]);
+
   const treeData = useMemo(() => {
     const tree: TreeNode[] = [];
     const regionsMap = new Map<number, TreeNode>();
@@ -76,15 +115,20 @@ export default function RepresentativesList() {
     representatives.forEach(rep => {
       if (!rep.regionCode || !rep.districtCode || !rep.managerCode) return;
 
+      const regionName = rep.regionDescription || `Región ${rep.regionCode}`;
+      const districtName = rep.districtDescription || `Distrito ${rep.districtCode}`;
+      const managerName = rep.managerDescription || `Manager ${rep.managerCode}`;
+
       // Create or get region node
       if (!regionsMap.has(rep.regionCode)) {
         const regionNode: TreeNode = {
           id: `region-${rep.regionCode}`,
           type: 'region',
           code: rep.regionCode,
-          name: rep.regionDescription || `Región ${rep.regionCode}`,
+          name: regionName,
           children: [],
-          isExpanded: expandedNodes.has(`region-${rep.regionCode}`)
+          isExpanded: expandedNodes.has(`region-${rep.regionCode}`),
+          path: [regionName]
         };
         regionsMap.set(rep.regionCode, regionNode);
         tree.push(regionNode);
@@ -98,9 +142,10 @@ export default function RepresentativesList() {
           id: `district-${districtKey}`,
           type: 'district',
           code: rep.districtCode,
-          name: rep.districtDescription || `Distrito ${rep.districtCode}`,
+          name: districtName,
           children: [],
-          isExpanded: expandedNodes.has(`district-${districtKey}`)
+          isExpanded: expandedNodes.has(`district-${districtKey}`),
+          path: [regionName, districtName]
         };
         districtsMap.set(districtKey, districtNode);
         regionNode.children!.push(districtNode);
@@ -114,9 +159,10 @@ export default function RepresentativesList() {
           id: `manager-${managerKey}`,
           type: 'manager',
           code: rep.managerCode,
-          name: rep.managerDescription || `Manager ${rep.managerCode}`,
+          name: managerName,
           children: [],
-          isExpanded: expandedNodes.has(`manager-${managerKey}`)
+          isExpanded: expandedNodes.has(`manager-${managerKey}`),
+          path: [regionName, districtName, managerName]
         };
         managersMap.set(managerKey, managerNode);
         districtNode.children!.push(managerNode);
@@ -124,12 +170,14 @@ export default function RepresentativesList() {
       const managerNode = managersMap.get(managerKey)!;
 
       // Add representative node
+      const repName = rep.description || `${rep.firstName} ${rep.lastName}`;
       const repNode: TreeNode = {
         id: `rep-${rep.code}`,
         type: 'representative',
         code: rep.code,
-        name: rep.description || `${rep.firstName} ${rep.lastName}`,
-        representative: rep
+        name: repName,
+        representative: rep,
+        path: [regionName, districtName, managerName, repName]
       };
       managerNode.children!.push(repNode);
     });
@@ -175,9 +223,78 @@ export default function RepresentativesList() {
     setSearchText('');
   };
 
+  const exportToCSV = useCallback(() => {
+    if (representatives.length === 0) {
+      addNotification('No hay datos para exportar', 'warning');
+      return;
+    }
+
+    const headers = ['Código', 'Nombre', 'Apellido', 'Región', 'Distrito', 'Manager', 'Línea de Negocio', 'Código Legacy'];
+    const rows = representatives.map(rep => [
+      rep.code,
+      rep.firstName || '',
+      rep.lastName || '',
+      rep.regionDescription || '',
+      rep.districtDescription || '',
+      rep.managerDescription || '',
+      rep.businessLineDescription || '',
+      rep.legacyCode || ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `representantes_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+
+    addNotification('Exportación completada', 'success');
+  }, [representatives, addNotification]);
+
+  const exportToJSON = useCallback(() => {
+    if (representatives.length === 0) {
+      addNotification('No hay datos para exportar', 'warning');
+      return;
+    }
+
+    const jsonContent = JSON.stringify(representatives, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `representantes_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+
+    addNotification('Exportación completada', 'success');
+  }, [representatives, addNotification]);
+
+  const highlightMatch = (text: string, search: string): JSX.Element => {
+    if (!search.trim()) return <>{text}</>;
+
+    const regex = new RegExp(`(${search})`, 'gi');
+    const parts = text.split(regex);
+
+    return (
+      <>
+        {parts.map((part, i) =>
+          regex.test(part) ? (
+            <mark key={i} className="search-highlight">{part}</mark>
+          ) : (
+            <span key={i}>{part}</span>
+          )
+        )}
+      </>
+    );
+  };
+
   const renderTreeNode = (node: TreeNode, level: number = 0): JSX.Element => {
     const hasChildren = node.children && node.children.length > 0;
     const isExpanded = expandedNodes.has(node.id);
+    const isHovered = hoveredNode === node.id;
+    const isSelected = selectedNode === node.id;
 
     const getNodeIcon = () => {
       switch (node.type) {
@@ -189,18 +306,38 @@ export default function RepresentativesList() {
     };
 
     const getNodeClass = () => {
-      return `tree-node tree-node-${node.type} tree-level-${level}`;
+      const classes = [`tree-node`, `tree-node-${node.type}`, `tree-level-${level}`];
+      if (compactView) classes.push('compact');
+      if (isHovered) classes.push('hovered');
+      if (isSelected) classes.push('selected');
+      return classes.join(' ');
+    };
+
+    const handleNodeClick = () => {
+      if (hasChildren) {
+        toggleNode(node.id);
+      } else if (node.type === 'representative' && node.representative) {
+        // Navigate to representative dashboard
+        navigate(`/representantes/${node.representative.code}/dashboard`);
+      }
+      setSelectedNode(node.id);
     };
 
     return (
       <div key={node.id} className="tree-item">
         <div
           className={getNodeClass()}
-          onClick={() => hasChildren && toggleNode(node.id)}
+          onClick={handleNodeClick}
+          onMouseEnter={() => setHoveredNode(node.id)}
+          onMouseLeave={() => setHoveredNode(null)}
           style={{ cursor: hasChildren ? 'pointer' : 'default' }}
+          title={node.path?.join(' > ')}
         >
+          {/* Connection line */}
+          {level > 0 && <div className="tree-line"></div>}
+
           {hasChildren && (
-            <span className="material-icons expand-icon">
+            <span className={`material-icons expand-icon ${isExpanded ? 'expanded' : ''}`}>
               {isExpanded ? 'expand_more' : 'chevron_right'}
             </span>
           )}
@@ -208,9 +345,11 @@ export default function RepresentativesList() {
 
           <span className="material-icons node-icon">{getNodeIcon()}</span>
 
-          <span className="node-label">{node.name}</span>
+          <span className="node-label">
+            {highlightMatch(node.name, searchText)}
+          </span>
 
-          {node.type === 'representative' && node.representative && (
+          {node.type === 'representative' && node.representative && !compactView && (
             <div className="rep-details">
               <span className="rep-code">#{node.representative.code}</span>
               {node.representative.businessLineDescription && (
@@ -223,7 +362,9 @@ export default function RepresentativesList() {
           )}
 
           {hasChildren && (
-            <span className="node-count">({node.children!.length})</span>
+            <span className="node-count" title={`${node.children!.length} elementos`}>
+              ({node.children!.length})
+            </span>
           )}
         </div>
 
@@ -369,13 +510,53 @@ export default function RepresentativesList() {
         )}
       </div>
 
+      {/* Statistics Cards */}
+      <div className="stats-grid">
+        <div className="stat-card stat-region">
+          <span className="material-icons stat-icon">public</span>
+          <div className="stat-content">
+            <div className="stat-value">{treeStats.totalRegions}</div>
+            <div className="stat-label">Regiones</div>
+          </div>
+        </div>
+        <div className="stat-card stat-district">
+          <span className="material-icons stat-icon">location_city</span>
+          <div className="stat-content">
+            <div className="stat-value">{treeStats.totalDistricts}</div>
+            <div className="stat-label">Distritos</div>
+          </div>
+        </div>
+        <div className="stat-card stat-manager">
+          <span className="material-icons stat-icon">supervisor_account</span>
+          <div className="stat-content">
+            <div className="stat-value">{treeStats.totalManagers}</div>
+            <div className="stat-label">Managers</div>
+          </div>
+        </div>
+        <div className="stat-card stat-representative">
+          <span className="material-icons stat-icon">people</span>
+          <div className="stat-content">
+            <div className="stat-value">{treeStats.totalRepresentatives}</div>
+            <div className="stat-label">Representantes</div>
+          </div>
+        </div>
+      </div>
+
       {/* Tree Controls */}
       <div className="tree-controls">
         <div className="tree-info">
-          <span className="material-icons">people</span>
-          <span>{representatives.length} representantes encontrados</span>
+          <span className="material-icons">account_tree</span>
+          <span>Vista jerárquica</span>
         </div>
         <div className="tree-actions">
+          <button
+            className={`btn-tree-action ${compactView ? 'active' : ''}`}
+            onClick={() => setCompactView(!compactView)}
+            title="Vista compacta"
+          >
+            <span className="material-icons">{compactView ? 'view_headline' : 'view_compact'}</span>
+            {compactView ? 'Normal' : 'Compacta'}
+          </button>
           <button className="btn-tree-action" onClick={expandAll}>
             <span className="material-icons">unfold_more</span>
             Expandir todo
@@ -383,6 +564,15 @@ export default function RepresentativesList() {
           <button className="btn-tree-action" onClick={collapseAll}>
             <span className="material-icons">unfold_less</span>
             Colapsar todo
+          </button>
+          <div className="tree-actions-divider"></div>
+          <button className="btn-tree-action btn-export" onClick={exportToCSV} title="Exportar a CSV">
+            <span className="material-icons">file_download</span>
+            CSV
+          </button>
+          <button className="btn-tree-action btn-export" onClick={exportToJSON} title="Exportar a JSON">
+            <span className="material-icons">code</span>
+            JSON
           </button>
         </div>
       </div>
