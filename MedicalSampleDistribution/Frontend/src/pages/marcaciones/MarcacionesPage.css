@@ -1,0 +1,9 @@
+.marcaciones-page {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-content {
+  animation: fadeIn 0.3s ease-in;
+}

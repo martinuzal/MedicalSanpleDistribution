@@ -1,0 +1,320 @@
+.coverage-dashboard {
+  padding: 2rem;
+  max-width: 2200px;
+  margin: 0 auto;
+}
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  transition: all 0.2s;
+}
+
+.btn-back:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-color);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.summary-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.summary-card.alert {
+  border-left: 4px solid #ff6b6b;
+}
+
+.summary-card.success {
+  border-left: 4px solid #51cf66;
+}
+
+/* Semaforo Summary Cards */
+.summary-card.semaforo-green {
+  border-left: 4px solid #51cf66;
+}
+
+.summary-card.semaforo-green:hover {
+  border-color: #51cf66;
+  background: rgba(81, 207, 102, 0.05);
+}
+
+.summary-card.semaforo-green.active {
+  background: rgba(81, 207, 102, 0.15);
+  border-color: #51cf66;
+  box-shadow: 0 0 0 3px rgba(81, 207, 102, 0.2);
+}
+
+.summary-card.semaforo-yellow {
+  border-left: 4px solid #ffd43b;
+}
+
+.summary-card.semaforo-yellow:hover {
+  border-color: #ffd43b;
+  background: rgba(255, 212, 59, 0.05);
+}
+
+.summary-card.semaforo-yellow.active {
+  background: rgba(255, 212, 59, 0.15);
+  border-color: #ffd43b;
+  box-shadow: 0 0 0 3px rgba(255, 212, 59, 0.2);
+}
+
+.summary-card.semaforo-red {
+  border-left: 4px solid #ff6b6b;
+}
+
+.summary-card.semaforo-red:hover {
+  border-color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.05);
+}
+
+.summary-card.semaforo-red.active {
+  background: rgba(255, 107, 107, 0.15);
+  border-color: #ff6b6b;
+  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.2);
+}
+
+.summary-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  background: var(--accent-color);
+  border-radius: 50%;
+  color: white;
+}
+
+.summary-card.alert .summary-icon {
+  background: #ff6b6b;
+}
+
+.summary-card.success .summary-icon {
+  background: #51cf66;
+}
+
+.summary-icon .material-icons {
+  font-size: 32px;
+}
+
+.summary-content {
+  flex: 1;
+}
+
+.summary-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.summary-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.table-container {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  margin-top: 2rem;
+}
+
+.coverage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.coverage-table thead {
+  background: var(--bg-primary);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.coverage-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.coverage-table th:hover {
+  background: var(--bg-hover);
+}
+
+.coverage-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.coverage-table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.coverage-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.coverage-table tbody tr.status-negative {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.coverage-table tbody tr.status-low {
+  background: rgba(255, 193, 7, 0.1);
+}
+
+.coverage-table tbody tr.status-good {
+  background: rgba(81, 207, 102, 0.1);
+}
+
+.coverage-table .material-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 300px;
+}
+
+.coverage-table .material-name.clickable {
+  color: var(--accent-color);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.coverage-table .material-name.clickable:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.coverage-table .number {
+  text-align: right;
+  font-family: 'Courier New', monospace;
+}
+
+.coverage-table .emphasized {
+  font-weight: 600;
+  color: var(--accent-color);
+}
+
+.status-cell {
+  text-align: center;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.status-negative {
+  background: #ff6b6b;
+  color: white;
+}
+
+.status-badge.status-low {
+  background: #ffc107;
+  color: #000;
+}
+
+.status-badge.status-ok {
+  background: #74c0fc;
+  color: #000;
+}
+
+.status-badge.status-good {
+  background: #51cf66;
+  color: white;
+}
+
+.loading,
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+}
+
+.error {
+  color: var(--error-color);
+}
+
+@media (max-width: 1600px) {
+  .summary-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 1200px) {
+  .summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .coverage-dashboard {
+    padding: 1rem;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .table-container {
+    overflow-x: auto;
+  }
+
+  .coverage-table {
+    font-size: 0.8rem;
+  }
+
+  .coverage-table th,
+  .coverage-table td {
+    padding: 0.5rem;
+  }
+}
+
+/* Semaforo Cell Styles */
+.semaforo-cell {
+  text-align: center;
+}
+
+.semaforo-icon {
+  font-size: 1.2rem;
+  display: inline-block;
+  cursor: help;
+}

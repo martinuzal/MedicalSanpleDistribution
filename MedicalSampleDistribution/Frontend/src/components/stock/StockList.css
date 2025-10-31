@@ -1,0 +1,15 @@
+.stock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stock-manual-value {
+  font-weight: 600;
+  color: var(--accent-color);
+}
+
+.text-muted {
+  color: var(--text-secondary);
+  font-style: italic;
+}
