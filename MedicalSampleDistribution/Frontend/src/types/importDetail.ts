@@ -26,6 +26,7 @@ export interface ConfigurationCriteria {
   porcenDeAplic: number | null;
   countPreview: number | null;
   rowId: number | null;
+  usuarioAlta: string | null;
 }
 
 export interface DirectAssignment {

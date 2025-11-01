@@ -28,6 +28,7 @@ public class ConfigurationCriteriaDto
     public int? PorcenDeAplic { get; set; }
     public int? CountPreview { get; set; }
     public int? RowId { get; set; }
+    public string? UsuarioAlta { get; set; }
 }
 
 // DTOs para Asignaciones Directas (MigrationDirect)
@@ -75,4 +76,13 @@ public class ImportStatisticsDto
     public int TotalMaterials { get; set; }
     public int TotalStock { get; set; }
     public int MaterialsWithMinMax { get; set; }
+}
+
+// DTO para materiales de un criterio específico
+public class CriteriaMaterialDto
+{
+    public int RowId { get; set; }
+    public string CodigoSap { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public int Quantity { get; set; }
 }

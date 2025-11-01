@@ -11,10 +11,21 @@ interface ImportDetailModalProps {
 
 type TabType = 'general' | 'criteria' | 'assignments' | 'materials';
 
+interface CriteriaMaterial {
+  rowId: number;
+  codigoSap: string;
+  description: string;
+  quantity: number;
+}
+
 export default function ImportDetailModal({ importId, onClose }: ImportDetailModalProps) {
   const [detail, setDetail] = useState<ImportDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('general');
+  const [selectedCriteriaId, setSelectedCriteriaId] = useState<number | null>(null);
+  const [criteriaMaterials, setCriteriaMaterials] = useState<CriteriaMaterial[]>([]);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const { addNotification } = useNotifications();
 
   useEffect(() => {
@@ -49,6 +60,86 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
   const renderValue = (value: string | number | null | undefined) => {
     if (value === null || value === undefined || value === '') return <span className="empty-value">-</span>;
     return <span>{value}</span>;
+  };
+
+  const loadCriteriaMaterials = async (criteriaRowId: number) => {
+    try {
+      console.log('Loading materials for criteriaRowId:', criteriaRowId);
+      setLoadingMaterials(true);
+      const url = `http://localhost:5001/api/imports/${importId}/criteria/${criteriaRowId}/materials`;
+      console.log('Fetching from URL:', url);
+      const response = await fetch(url);
+      console.log('Response status:', response.status);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error('Error al cargar materiales');
+      }
+      const data = await response.json();
+      console.log('Materials loaded:', data);
+      setCriteriaMaterials(data);
+      setSelectedCriteriaId(criteriaRowId);
+    } catch (error) {
+      addNotification('Error al cargar materiales del criterio', 'error');
+      console.error('Error loading criteria materials:', error);
+    } finally {
+      setLoadingMaterials(false);
+    }
+  };
+
+  const getFieldIcon = (field: string): string => {
+    const iconMap: Record<string, string> = {
+      tipoCliente: 'person',
+      campania: 'campaign',
+      lugarVisita: 'place',
+      institucion: 'business',
+      especialidad: 'medical_services',
+      edad: 'cake',
+      sexo: 'wc',
+      especialidadSec: 'local_hospital',
+      especialidadCartera: 'work',
+      categoria: 'category',
+      tarea: 'assignment',
+      frecuencia: 'repeat',
+      planificacion: 'event_note',
+      provincia: 'map',
+      tratamiento: 'medication',
+      objetosEntregados: 'card_giftcard',
+      linea: 'timeline',
+      auditCategoria: 'fact_check',
+      auditMercado: 'store',
+      auditProducto: 'inventory',
+      auditMolecula: 'science',
+    };
+    return iconMap[field] || 'label';
+  };
+
+  const getCriteriaFields = (criteria: any) => {
+    const fields: Array<{ label: string; value: any; icon: string; key: string }> = [];
+
+    if (criteria.tipoCliente) fields.push({ label: 'Tipo Cliente', value: criteria.tipoCliente, icon: 'person', key: 'tipoCliente' });
+    if (criteria.campania) fields.push({ label: 'Campaña', value: criteria.campania, icon: 'campaign', key: 'campania' });
+    if (criteria.lugarVisita) fields.push({ label: 'Lugar Visita', value: criteria.lugarVisita, icon: 'place', key: 'lugarVisita' });
+    if (criteria.institucion) fields.push({ label: 'Institución', value: criteria.institucion, icon: 'business', key: 'institucion' });
+    if (criteria.especialidad) fields.push({ label: 'Especialidad', value: criteria.especialidad, icon: 'medical_services', key: 'especialidad' });
+    if (criteria.edad) fields.push({ label: 'Edad', value: criteria.edad, icon: 'cake', key: 'edad' });
+    if (criteria.sexo) fields.push({ label: 'Sexo', value: criteria.sexo, icon: 'wc', key: 'sexo' });
+    if (criteria.especialidadSec) fields.push({ label: 'Especialidad Sec', value: criteria.especialidadSec, icon: 'local_hospital', key: 'especialidadSec' });
+    if (criteria.especialidadCartera) fields.push({ label: 'Especialidad Cartera', value: criteria.especialidadCartera, icon: 'work', key: 'especialidadCartera' });
+    if (criteria.categoria) fields.push({ label: 'Categoría', value: criteria.categoria, icon: 'category', key: 'categoria' });
+    if (criteria.tarea) fields.push({ label: 'Tarea', value: criteria.tarea, icon: 'assignment', key: 'tarea' });
+    if (criteria.frecuencia) fields.push({ label: 'Frecuencia', value: criteria.frecuencia, icon: 'repeat', key: 'frecuencia' });
+    if (criteria.planificacion) fields.push({ label: 'Planificación', value: criteria.planificacion, icon: 'event_note', key: 'planificacion' });
+    if (criteria.provincia) fields.push({ label: 'Provincia', value: criteria.provincia, icon: 'map', key: 'provincia' });
+    if (criteria.tratamiento) fields.push({ label: 'Tratamiento', value: criteria.tratamiento, icon: 'medication', key: 'tratamiento' });
+    if (criteria.objetosEntregados) fields.push({ label: 'Objetos Entregados', value: criteria.objetosEntregados, icon: 'card_giftcard', key: 'objetosEntregados' });
+    if (criteria.linea) fields.push({ label: 'Línea', value: criteria.linea, icon: 'timeline', key: 'linea' });
+    if (criteria.auditCategoria) fields.push({ label: 'Audit Categoría', value: criteria.auditCategoria, icon: 'fact_check', key: 'auditCategoria' });
+    if (criteria.auditMercado) fields.push({ label: 'Audit Mercado', value: criteria.auditMercado, icon: 'store', key: 'auditMercado' });
+    if (criteria.auditProducto) fields.push({ label: 'Audit Producto', value: criteria.auditProducto, icon: 'inventory', key: 'auditProducto' });
+    if (criteria.auditMolecula) fields.push({ label: 'Audit Molécula', value: criteria.auditMolecula, icon: 'science', key: 'auditMolecula' });
+
+    return fields;
   };
 
   if (loading) {
@@ -181,30 +272,134 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
               {detail.criteria.length === 0 ? (
                 <div className="no-data">No hay criterios configurados</div>
               ) : (
-                <div className="criteria-list">
-                  {detail.criteria.map((criteria, index) => (
-                    <div key={criteria.id} className="criteria-card">
-                      <div className="criteria-header">
-                        <h4>Criterio #{index + 1}</h4>
-                        {criteria.porcenDeAplic && (
-                          <span className="badge badge-info">{criteria.porcenDeAplic}% aplicación</span>
-                        )}
+                <>
+                  <div className="view-mode-toolbar">
+                    <button
+                      className={`btn-view-mode ${viewMode === 'list' ? 'active' : ''}`}
+                      onClick={() => setViewMode('list')}
+                    >
+                      <span className="material-icons">view_list</span>
+                      Lista
+                    </button>
+                    <button
+                      className={`btn-view-mode ${viewMode === 'grid' ? 'active' : ''}`}
+                      onClick={() => setViewMode('grid')}
+                    >
+                      <span className="material-icons">view_module</span>
+                      Mosaico
+                    </button>
+                  </div>
+                  <div className="tab-content-inner">
+                    {viewMode === 'list' ? (
+                      <table className="criteria-table">
+                        <thead>
+                          <tr>
+                            <th>RowId</th>
+                            <th>%</th>
+                            <th>Usuario</th>
+                            <th>Criterios</th>
+                            <th className="text-center">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detail.criteria.map((criteria) => {
+                            const fields = getCriteriaFields(criteria);
+                            return (
+                              <tr key={criteria.id}>
+                                <td>
+                                  <span className="criteria-number-compact">#{criteria.rowId}</span>
+                                </td>
+                                <td>
+                                  {criteria.porcenDeAplic && (
+                                    <span className="criteria-percent-compact">{criteria.porcenDeAplic}%</span>
+                                  )}
+                                </td>
+                                <td>
+                                  {criteria.usuarioAlta && (
+                                    <span className="criteria-user-badge">
+                                      <span className="material-icons">person</span>
+                                      {criteria.usuarioAlta}
+                                    </span>
+                                  )}
+                                </td>
+                                <td>
+                                  <div className="criteria-badges-inline">
+                                    {fields.map((field) => (
+                                      <div key={field.key} className="criteria-badge-small">
+                                        <span className="material-icons badge-icon-small">{field.icon}</span>
+                                        <span className="badge-content-small">
+                                          <span className="badge-label-small">{field.label}:</span>
+                                          <span className="badge-value-small">{field.value}</span>
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="text-center">
+                                  <button
+                                    className="btn-view-materials-small"
+                                    onClick={() => {
+                                      console.log('Button clicked! RowId:', criteria.rowId);
+                                      loadCriteriaMaterials(criteria.rowId!);
+                                    }}
+                                    title="Ver materiales asignados"
+                                  >
+                                    <span className="material-icons">inventory_2</span>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="criteria-grid-compact">
+                        {detail.criteria.map((criteria) => {
+                          const fields = getCriteriaFields(criteria);
+                          return (
+                            <div key={criteria.id} className="criteria-row">
+                              <div className="criteria-row-header">
+                                <div className="criteria-row-header-left">
+                                  <span className="criteria-number">#{criteria.rowId}</span>
+                                  {criteria.porcenDeAplic && (
+                                    <span className="criteria-percent">{criteria.porcenDeAplic}%</span>
+                                  )}
+                                  {criteria.usuarioAlta && (
+                                    <span className="criteria-user-badge">
+                                      <span className="material-icons">person</span>
+                                      {criteria.usuarioAlta}
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  className="btn-view-materials-small"
+                                  onClick={() => {
+                                    console.log('Button clicked (Grid)! RowId:', criteria.rowId);
+                                    loadCriteriaMaterials(criteria.rowId!);
+                                  }}
+                                  title="Ver materiales asignados"
+                                >
+                                  <span className="material-icons">inventory_2</span>
+                                </button>
+                              </div>
+                              <div className="criteria-badges">
+                                {fields.map((field) => (
+                                  <div key={field.key} className="criteria-badge">
+                                    <span className="material-icons badge-icon">{field.icon}</span>
+                                    <span className="badge-content">
+                                      <span className="badge-label">{field.label}:</span>
+                                      <span className="badge-value">{field.value}</span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="criteria-grid">
-                        <div className="criteria-item"><label>Tipo Cliente:</label>{renderValue(criteria.tipoCliente)}</div>
-                        <div className="criteria-item"><label>Campaña:</label>{renderValue(criteria.campania)}</div>
-                        <div className="criteria-item"><label>Lugar Visita:</label>{renderValue(criteria.lugarVisita)}</div>
-                        <div className="criteria-item"><label>Institución:</label>{renderValue(criteria.institucion)}</div>
-                        <div className="criteria-item"><label>Especialidad:</label>{renderValue(criteria.especialidad)}</div>
-                        <div className="criteria-item"><label>Categoría:</label>{renderValue(criteria.categoria)}</div>
-                        <div className="criteria-item"><label>Línea:</label>{renderValue(criteria.linea)}</div>
-                        <div className="criteria-item"><label>Provincia:</label>{renderValue(criteria.provincia)}</div>
-                        <div className="criteria-item"><label>Frecuencia:</label>{renderValue(criteria.frecuencia)}</div>
-                        <div className="criteria-item"><label>Planificación:</label>{renderValue(criteria.planificacion)}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -296,6 +491,66 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
           </button>
         </div>
       </div>
+
+      {/* Materials Modal */}
+      {selectedCriteriaId && (
+        <div className="modal-overlay modal-secondary" onClick={() => setSelectedCriteriaId(null)}>
+          <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Materiales del Criterio</h3>
+                <p className="modal-subtitle">Criterio RowId: {selectedCriteriaId}</p>
+              </div>
+              <button onClick={() => setSelectedCriteriaId(null)} className="btn-close">
+                <span className="material-icons">close</span>
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {loadingMaterials ? (
+                <div className="loading">Cargando materiales...</div>
+              ) : criteriaMaterials.length === 0 ? (
+                <div className="no-data">No hay materiales asignados a este criterio</div>
+              ) : (
+                <>
+                  <div className="materials-scorecard">
+                    <div className="scorecard-icon">
+                      <span className="material-icons">inventory_2</span>
+                    </div>
+                    <div className="scorecard-content">
+                      <div className="scorecard-label">Total de Productos</div>
+                      <div className="scorecard-value">{criteriaMaterials.length}</div>
+                    </div>
+                  </div>
+                  <div className="materials-list-compact">
+                    {criteriaMaterials.map((material) => {
+                      console.log('Material:', material.codigoSap, 'Quantity:', material.quantity);
+                      return (
+                        <div key={material.codigoSap} className="material-item-compact">
+                          <span className="material-icons material-item-icon">inventory_2</span>
+                          <div className="material-item-content">
+                            <div className="material-code">{material.codigoSap}</div>
+                            <div className="material-description">{material.description}</div>
+                          </div>
+                          <div className="material-quantity">
+                            <span className="quantity-value">{material.quantity || 0}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button onClick={() => setSelectedCriteriaId(null)} className="btn-secondary">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

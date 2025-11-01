@@ -316,7 +316,8 @@ public class ImportsController : ControllerBase
                     AuditMolecula = c.AuditMolecula,
                     PorcenDeAplic = c.PorcenDeAplic,
                     CountPreview = c.CountPreview,
-                    RowId = c.RowId
+                    RowId = c.RowId,
+                    UsuarioAlta = c.UsuarioAlta
                 })
                 .ToListAsync();
 
@@ -801,6 +802,70 @@ public class ImportsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error al obtener criterios para marcación {Id}", id);
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
+
+    [HttpGet("{importId}/criteria/{criteriaId}/materials")]
+    public async Task<ActionResult<List<CriteriaMaterialDto>>> GetCriteriaMaterials(int importId, int criteriaId)
+    {
+        try
+        {
+            _logger.LogInformation($"Getting materials for ImportId: {importId}, CriteriaId: {criteriaId}");
+
+            var materials = new List<CriteriaMaterialDto>();
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = @"
+                    SELECT DISTINCT
+                        MigrationConfiguration.RowId,
+                        Material.CodigoSap,
+                        Material.Description,
+                        ISNULL(MigrationAssignment.Value, 0) + MigrationAssignment.Direct AS Quantity
+                    FROM MigrationConfiguration
+                    INNER JOIN MigrationAssignment ON
+                        MigrationAssignment.ImportId = MigrationConfiguration.ImportId AND
+                        MigrationAssignment.RowId = MigrationConfiguration.RowId
+                    INNER JOIN Material ON Material.CodigoSap = MigrationAssignment.CodigoSap
+                    WHERE MigrationConfiguration.ImportId = @importId
+                        AND MigrationConfiguration.RowId = @criteriaId
+                        AND (ISNULL(MigrationAssignment.Value, 0) <> 0 OR MigrationAssignment.Direct <> 0)";
+                command.CommandType = System.Data.CommandType.Text;
+
+                var importIdParam = command.CreateParameter();
+                importIdParam.ParameterName = "@importId";
+                importIdParam.Value = importId;
+                command.Parameters.Add(importIdParam);
+
+                var criteriaIdParam = command.CreateParameter();
+                criteriaIdParam.ParameterName = "@criteriaId";
+                criteriaIdParam.Value = criteriaId;
+                command.Parameters.Add(criteriaIdParam);
+
+                await _context.Database.OpenConnectionAsync();
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        materials.Add(new CriteriaMaterialDto
+                        {
+                            RowId = reader.GetInt32(0),
+                            CodigoSap = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                            Description = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                            Quantity = reader.IsDBNull(3) ? 0 : reader.GetInt32(3)
+                        });
+                    }
+                }
+                await _context.Database.CloseConnectionAsync();
+            }
+
+            _logger.LogInformation($"Retrieved {materials.Count} materials for criteria {criteriaId}");
+
+            return Ok(materials);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener materiales para criterio {CriteriaId} en marcación {ImportId}", criteriaId, importId);
             return StatusCode(500, "Error interno del servidor");
         }
     }
