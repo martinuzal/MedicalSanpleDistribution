@@ -43,3 +43,64 @@ public class ImportListResponse
     public int TotalPages { get; set; }
     public int CurrentPage { get; set; }
 }
+
+public class CreateCriteriaDto
+{
+    public string? TipoCliente { get; set; }
+    public string? Campania { get; set; }
+    public string? LugarVisita { get; set; }
+    public string? Institucion { get; set; }
+    public string? Especialidad { get; set; }
+    public string? Edad { get; set; }
+    public string? Sexo { get; set; }
+    public string? EspecialidadSec { get; set; }
+    public string? EspecialidadCartera { get; set; }
+    public string? Categoria { get; set; }
+    public string? Tarea { get; set; }
+    public string? Frecuencia { get; set; }
+    public string? Planificacion { get; set; }
+    public string? Provincia { get; set; }
+    public string? Tratamiento { get; set; }
+    public string? ObjetosEntregados { get; set; }
+    public string? Linea { get; set; }
+    public string? AuditCategoria { get; set; }
+    public string? AuditMercado { get; set; }
+    public string? AuditProducto { get; set; }
+    public string? AuditMolecula { get; set; }
+    public string? PorcenDeAplic { get; set; }
+    public string UsuarioAlta { get; set; } = null!;
+    public List<ProductAssignmentDto>? Products { get; set; }
+}
+
+public class ProductAssignmentDto
+{
+    public string CodigoSap { get; set; } = null!;
+    public int Quantity { get; set; }
+}
+
+public class CreateDirectAssignmentDto
+{
+    public string? Supervisor { get; set; }
+    public string? LegajoSupervisor { get; set; }
+    public string? Representante { get; set; }
+    public string? LegajoRepresentante { get; set; }
+    public string? Excluded { get; set; }
+    public string UsuarioAlta { get; set; } = null!;
+    public List<ProductAssignmentDto>? Products { get; set; }
+}
+
+public class DirectAssignmentDetailDto
+{
+    public string? Supervisor { get; set; }
+    public string? LegajoSupervisor { get; set; }
+    public string? Representante { get; set; }
+    public string? LegajoRepresentante { get; set; }
+    public string? Excluded { get; set; }
+    public List<ProductQuantityDto>? Products { get; set; }
+}
+
+public class ProductQuantityDto
+{
+    public string CodigoSap { get; set; } = null!;
+    public int Quantity { get; set; }
+}

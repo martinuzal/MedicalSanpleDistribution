@@ -26,7 +26,8 @@
 .modal-xl {
   max-width: 1400px;
   width: 95%;
-  max-height: 90vh;
+  height: 85vh;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
 }
@@ -67,6 +68,7 @@
   padding: 1rem;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .stat-card {
@@ -107,6 +109,7 @@
   border-bottom: 2px solid var(--border-color);
   background: var(--bg-secondary);
   overflow-x: auto;
+  flex-shrink: 0;
 }
 
 .tab {
@@ -143,8 +146,9 @@
 .tab-content {
   display: flex;
   flex-direction: column;
-  max-height: 600px;
+  height: 100%;
   overflow: hidden;
+  flex: 1;
 }
 
 .tab-content-inner {
@@ -450,6 +454,39 @@
 
 .btn-view-materials-small .material-icons {
   font-size: 18px;
+}
+
+.btn-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 36px;
+  height: 36px;
+}
+
+.btn-action-icon:hover {
+  background: rgba(0, 0, 0, 0.05);
+  transform: scale(1.1);
+}
+
+.btn-action-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-action-icon:disabled:hover {
+  background: transparent;
+  transform: none;
+}
+
+.btn-action-icon .material-icons {
+  font-size: 20px;
 }
 
 /* Compact Criteria List */

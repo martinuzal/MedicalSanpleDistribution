@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import type { ImportDetail } from '../../types/importDetail';
 import { importService } from '../../services/importService';
 import { useNotifications } from '../../contexts/NotificationContext';
+import CriteriaForm from './CriteriaForm';
+import DirectAssignmentForm from './DirectAssignmentForm';
 import './ImportDetailModal.css';
 
 interface ImportDetailModalProps {
@@ -30,7 +32,13 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
   const [assignmentMaterials, setAssignmentMaterials] = useState<CriteriaMaterial[]>([]);
   const [loadingAssignmentMaterials, setLoadingAssignmentMaterials] = useState(false);
+  const [showCriteriaForm, setShowCriteriaForm] = useState(false);
+  const [editingCriteriaId, setEditingCriteriaId] = useState<number | null>(null);
+  const [showDirectAssignmentForm, setShowDirectAssignmentForm] = useState(false);
+  const [editingDirectAssignmentRowId, setEditingDirectAssignmentRowId] = useState<number | null>(null);
   const { addNotification } = useNotifications();
+
+  const canEditOrDelete = detail?.import.state === 'A' || detail?.import.state === 'PA';
 
   useEffect(() => {
     loadDetail();
@@ -116,6 +124,82 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
     }
   };
 
+  const handleEditCriteria = (criteriaRowId: number) => {
+    if (!canEditOrDelete) {
+      addNotification('Solo se pueden editar criterios en marcaciones con estado A (Abierta) o PA (Parcialmente Abierta)', 'warning');
+      return;
+    }
+    setEditingCriteriaId(criteriaRowId);
+    setShowCriteriaForm(true);
+  };
+
+  const handleDeleteCriteria = async (criteriaRowId: number) => {
+    if (!canEditOrDelete) {
+      addNotification('Solo se pueden eliminar criterios en marcaciones con estado A (Abierta) o PA (Parcialmente Abierta)', 'warning');
+      return;
+    }
+
+    if (!confirm('¿Está seguro que desea eliminar este criterio? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5001/api/imports/${importId}/criteria/${criteriaRowId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error('Error al eliminar criterio');
+      }
+
+      addNotification('Criterio eliminado exitosamente', 'success');
+      loadDetail(); // Recargar datos
+    } catch (error) {
+      addNotification('Error al eliminar criterio', 'error');
+      console.error('Error deleting criteria:', error);
+    }
+  };
+
+  const handleEditDirectAssignment = (rowId: number) => {
+    if (!canEditOrDelete) {
+      addNotification('Solo se pueden editar asignaciones directas en marcaciones con estado A (Abierta) o PA (Parcialmente Abierta)', 'warning');
+      return;
+    }
+    setEditingDirectAssignmentRowId(rowId);
+    setShowDirectAssignmentForm(true);
+  };
+
+  const handleDeleteDirectAssignment = async (rowId: number) => {
+    if (!canEditOrDelete) {
+      addNotification('Solo se pueden eliminar asignaciones directas en marcaciones con estado A (Abierta) o PA (Parcialmente Abierta)', 'warning');
+      return;
+    }
+
+    if (!confirm('¿Está seguro que desea eliminar esta asignación directa? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5001/api/imports/${importId}/direct-assignment/${rowId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error('Error al eliminar asignación directa');
+      }
+
+      addNotification('Asignación directa eliminada exitosamente', 'success');
+      loadDetail(); // Recargar datos
+    } catch (error) {
+      addNotification('Error al eliminar asignación directa', 'error');
+      console.error('Error deleting direct assignment:', error);
+    }
+  };
+
   const getFieldIcon = (field: string): string => {
     const iconMap: Record<string, string> = {
       tipoCliente: 'person',
@@ -185,8 +269,8 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
 
   if (loading) {
     return (
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-content modal-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-overlay">
+        <div className="modal-content modal-xl">
           <div className="loading">Cargando detalle...</div>
         </div>
       </div>
@@ -196,8 +280,8 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
   if (!detail) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content modal-xl" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal-content modal-xl">
         <div className="modal-header">
           <div>
             <h2>Detalle de Marcación</h2>
@@ -310,27 +394,35 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
           {/* Criteria Tab */}
           {activeTab === 'criteria' && (
             <div className="tab-content">
+              <div className="view-mode-toolbar">
+                <button
+                  className={`btn-view-mode ${viewMode === 'list' ? 'active' : ''}`}
+                  onClick={() => setViewMode('list')}
+                >
+                  <span className="material-icons">view_list</span>
+                  Lista
+                </button>
+                <button
+                  className={`btn-view-mode ${viewMode === 'grid' ? 'active' : ''}`}
+                  onClick={() => setViewMode('grid')}
+                >
+                  <span className="material-icons">view_module</span>
+                  Mosaico
+                </button>
+                <div style={{ flex: 1 }}></div>
+                {(detail.import.state === 'A' || detail.import.state === 'PA') && (
+                  <button className="btn-view-mode" onClick={() => setShowCriteriaForm(true)}>
+                    <span className="material-icons">add</span>
+                    Nuevo Criterio
+                  </button>
+                )}
+              </div>
               {detail.criteria.length === 0 ? (
-                <div className="no-data">No hay criterios configurados</div>
+                <div className="no-data">
+                  <p>No hay criterios configurados</p>
+                </div>
               ) : (
-                <>
-                  <div className="view-mode-toolbar">
-                    <button
-                      className={`btn-view-mode ${viewMode === 'list' ? 'active' : ''}`}
-                      onClick={() => setViewMode('list')}
-                    >
-                      <span className="material-icons">view_list</span>
-                      Lista
-                    </button>
-                    <button
-                      className={`btn-view-mode ${viewMode === 'grid' ? 'active' : ''}`}
-                      onClick={() => setViewMode('grid')}
-                    >
-                      <span className="material-icons">view_module</span>
-                      Mosaico
-                    </button>
-                  </div>
-                  <div className="tab-content-inner">
+                <div className="tab-content-inner">
                     {viewMode === 'list' ? (
                       <table className="criteria-table">
                         <thead>
@@ -377,16 +469,49 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
                                   </div>
                                 </td>
                                 <td className="text-center">
-                                  <button
-                                    className="btn-view-materials-small"
-                                    onClick={() => {
-                                      console.log('Button clicked! RowId:', criteria.rowId);
-                                      loadCriteriaMaterials(criteria.rowId!);
-                                    }}
-                                    title="Ver materiales asignados"
-                                  >
-                                    <span className="material-icons">inventory_2</span>
-                                  </button>
+                                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                    <button
+                                      className="btn-action-icon"
+                                      onClick={() => {
+                                        console.log('Button clicked! RowId:', criteria.rowId);
+                                        if (criteria.rowId !== null) {
+                                          loadCriteriaMaterials(criteria.rowId);
+                                        }
+                                      }}
+                                      title="Ver materiales asignados"
+                                      disabled={criteria.rowId === null}
+                                    >
+                                      <span className="material-icons" style={{ color: '#4f46e5' }}>inventory_2</span>
+                                    </button>
+                                    {canEditOrDelete && (
+                                      <>
+                                        <button
+                                          className="btn-action-icon"
+                                          onClick={() => {
+                                            if (criteria.rowId !== null) {
+                                              handleEditCriteria(criteria.rowId);
+                                            }
+                                          }}
+                                          title="Editar criterio"
+                                          disabled={criteria.rowId === null}
+                                        >
+                                          <span className="material-icons" style={{ color: '#1976d2' }}>edit</span>
+                                        </button>
+                                        <button
+                                          className="btn-action-icon"
+                                          onClick={() => {
+                                            if (criteria.rowId !== null) {
+                                              handleDeleteCriteria(criteria.rowId);
+                                            }
+                                          }}
+                                          title="Eliminar criterio"
+                                          disabled={criteria.rowId === null}
+                                        >
+                                          <span className="material-icons" style={{ color: '#d32f2f' }}>delete</span>
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -412,16 +537,49 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
                                     </span>
                                   )}
                                 </div>
-                                <button
-                                  className="btn-view-materials-small"
-                                  onClick={() => {
-                                    console.log('Button clicked (Grid)! RowId:', criteria.rowId);
-                                    loadCriteriaMaterials(criteria.rowId!);
-                                  }}
-                                  title="Ver materiales asignados"
-                                >
-                                  <span className="material-icons">inventory_2</span>
-                                </button>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                  <button
+                                    className="btn-action-icon"
+                                    onClick={() => {
+                                      console.log('Button clicked (Grid)! RowId:', criteria.rowId);
+                                      if (criteria.rowId !== null) {
+                                        loadCriteriaMaterials(criteria.rowId);
+                                      }
+                                    }}
+                                    title="Ver materiales asignados"
+                                    disabled={criteria.rowId === null}
+                                  >
+                                    <span className="material-icons" style={{ color: '#4f46e5' }}>inventory_2</span>
+                                  </button>
+                                  {canEditOrDelete && (
+                                    <>
+                                      <button
+                                        className="btn-action-icon"
+                                        onClick={() => {
+                                          if (criteria.rowId !== null) {
+                                            handleEditCriteria(criteria.rowId);
+                                          }
+                                        }}
+                                        title="Editar criterio"
+                                        disabled={criteria.rowId === null}
+                                      >
+                                        <span className="material-icons" style={{ color: '#1976d2' }}>edit</span>
+                                      </button>
+                                      <button
+                                        className="btn-action-icon"
+                                        onClick={() => {
+                                          if (criteria.rowId !== null) {
+                                            handleDeleteCriteria(criteria.rowId);
+                                          }
+                                        }}
+                                        title="Eliminar criterio"
+                                        disabled={criteria.rowId === null}
+                                      >
+                                        <span className="material-icons" style={{ color: '#d32f2f' }}>delete</span>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                               <div className="criteria-badges">
                                 {fields.map((field) => (
@@ -440,7 +598,6 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
                       </div>
                     )}
                   </div>
-                </>
               )}
             </div>
           )}
@@ -448,27 +605,38 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
           {/* Assignments Tab */}
           {activeTab === 'assignments' && (
             <div className="tab-content">
+              <div className="view-mode-toolbar">
+                <button
+                  className={`btn-view-mode ${assignmentViewMode === 'list' ? 'active' : ''}`}
+                  onClick={() => setAssignmentViewMode('list')}
+                >
+                  <span className="material-icons">view_list</span>
+                  Lista
+                </button>
+                <button
+                  className={`btn-view-mode ${assignmentViewMode === 'grid' ? 'active' : ''}`}
+                  onClick={() => setAssignmentViewMode('grid')}
+                >
+                  <span className="material-icons">view_module</span>
+                  Mosaico
+                </button>
+                <div style={{ flex: 1 }}></div>
+                {(detail.import.state === 'A' || detail.import.state === 'PA') && (
+                  <button
+                    className="btn-view-mode"
+                    onClick={() => setShowDirectAssignmentForm(true)}
+                  >
+                    <span className="material-icons">add</span>
+                    Nueva Asignación Directa
+                  </button>
+                )}
+              </div>
               {detail.directAssignments.length === 0 ? (
-                <div className="no-data">No hay asignaciones directas</div>
+                <div className="no-data">
+                  <p>No hay asignaciones directas</p>
+                </div>
               ) : (
-                <>
-                  <div className="view-mode-toolbar">
-                    <button
-                      className={`btn-view-mode ${assignmentViewMode === 'list' ? 'active' : ''}`}
-                      onClick={() => setAssignmentViewMode('list')}
-                    >
-                      <span className="material-icons">view_list</span>
-                      Lista
-                    </button>
-                    <button
-                      className={`btn-view-mode ${assignmentViewMode === 'grid' ? 'active' : ''}`}
-                      onClick={() => setAssignmentViewMode('grid')}
-                    >
-                      <span className="material-icons">view_module</span>
-                      Mosaico
-                    </button>
-                  </div>
-                  <div className="tab-content-inner">
+                <div className="tab-content-inner">
                     {assignmentViewMode === 'list' ? (
                       <table className="criteria-table">
                         <thead>
@@ -509,16 +677,49 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
                                   </div>
                                 </td>
                                 <td className="text-center">
-                                  <button
-                                    className="btn-view-materials-small"
-                                    onClick={() => {
-                                      console.log('Button clicked! RowId:', assignment.rowId);
-                                      loadAssignmentMaterials(assignment.rowId!);
-                                    }}
-                                    title="Ver materiales asignados"
-                                  >
-                                    <span className="material-icons">inventory_2</span>
-                                  </button>
+                                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                    <button
+                                      className="btn-action-icon"
+                                      onClick={() => {
+                                        console.log('Button clicked! RowId:', assignment.rowId);
+                                        if (assignment.rowId !== null) {
+                                          loadAssignmentMaterials(assignment.rowId);
+                                        }
+                                      }}
+                                      title="Ver materiales asignados"
+                                      disabled={assignment.rowId === null}
+                                    >
+                                      <span className="material-icons" style={{ color: '#4f46e5' }}>inventory_2</span>
+                                    </button>
+                                    {canEditOrDelete && (
+                                      <>
+                                        <button
+                                          className="btn-action-icon"
+                                          onClick={() => {
+                                            if (assignment.rowId !== null) {
+                                              handleEditDirectAssignment(assignment.rowId);
+                                            }
+                                          }}
+                                          title="Editar asignación directa"
+                                          disabled={assignment.rowId === null}
+                                        >
+                                          <span className="material-icons" style={{ color: '#1976d2' }}>edit</span>
+                                        </button>
+                                        <button
+                                          className="btn-action-icon"
+                                          onClick={() => {
+                                            if (assignment.rowId !== null) {
+                                              handleDeleteDirectAssignment(assignment.rowId);
+                                            }
+                                          }}
+                                          title="Eliminar asignación directa"
+                                          disabled={assignment.rowId === null}
+                                        >
+                                          <span className="material-icons" style={{ color: '#d32f2f' }}>delete</span>
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -541,16 +742,49 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
                                     </span>
                                   )}
                                 </div>
-                                <button
-                                  className="btn-view-materials-small"
-                                  onClick={() => {
-                                    console.log('Button clicked (Grid)! RowId:', assignment.rowId);
-                                    loadAssignmentMaterials(assignment.rowId!);
-                                  }}
-                                  title="Ver materiales asignados"
-                                >
-                                  <span className="material-icons">inventory_2</span>
-                                </button>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                  <button
+                                    className="btn-action-icon"
+                                    onClick={() => {
+                                      console.log('Button clicked (Grid)! RowId:', assignment.rowId);
+                                      if (assignment.rowId !== null) {
+                                        loadAssignmentMaterials(assignment.rowId);
+                                      }
+                                    }}
+                                    title="Ver materiales asignados"
+                                    disabled={assignment.rowId === null}
+                                  >
+                                    <span className="material-icons" style={{ color: '#4f46e5' }}>inventory_2</span>
+                                  </button>
+                                  {canEditOrDelete && (
+                                    <>
+                                      <button
+                                        className="btn-action-icon"
+                                        onClick={() => {
+                                          if (assignment.rowId !== null) {
+                                            handleEditDirectAssignment(assignment.rowId);
+                                          }
+                                        }}
+                                        title="Editar asignación directa"
+                                        disabled={assignment.rowId === null}
+                                      >
+                                        <span className="material-icons" style={{ color: '#1976d2' }}>edit</span>
+                                      </button>
+                                      <button
+                                        className="btn-action-icon"
+                                        onClick={() => {
+                                          if (assignment.rowId !== null) {
+                                            handleDeleteDirectAssignment(assignment.rowId);
+                                          }
+                                        }}
+                                        title="Eliminar asignación directa"
+                                        disabled={assignment.rowId === null}
+                                      >
+                                        <span className="material-icons" style={{ color: '#d32f2f' }}>delete</span>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                               <div className="criteria-badges">
                                 {fields.map((field) => (
@@ -569,7 +803,6 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
                       </div>
                     )}
                   </div>
-                </>
               )}
             </div>
           )}
@@ -630,8 +863,8 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
 
       {/* Criteria Materials Modal */}
       {selectedCriteriaId && (
-        <div className="modal-overlay modal-secondary" onClick={() => setSelectedCriteriaId(null)}>
-          <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay modal-secondary">
+          <div className="modal-content modal-sm">
             <div className="modal-header">
               <div>
                 <h3>Materiales del Criterio</h3>
@@ -690,8 +923,8 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
 
       {/* Assignment Materials Modal */}
       {selectedAssignmentId && (
-        <div className="modal-overlay modal-secondary" onClick={() => setSelectedAssignmentId(null)}>
-          <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay modal-secondary">
+          <div className="modal-content modal-sm">
             <div className="modal-header">
               <div>
                 <h3>Materiales de la Asignación</h3>
@@ -746,6 +979,40 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
             </div>
           </div>
         </div>
+      )}
+
+      {/* Criteria Form Modal */}
+      {showCriteriaForm && (
+        <CriteriaForm
+          importId={importId}
+          criteriaId={editingCriteriaId}
+          onClose={() => {
+            setShowCriteriaForm(false);
+            setEditingCriteriaId(null);
+          }}
+          onSuccess={() => {
+            setShowCriteriaForm(false);
+            setEditingCriteriaId(null);
+            loadDetail();
+          }}
+        />
+      )}
+
+      {/* Direct Assignment Form Modal */}
+      {showDirectAssignmentForm && (
+        <DirectAssignmentForm
+          importId={importId}
+          rowId={editingDirectAssignmentRowId}
+          onClose={() => {
+            setShowDirectAssignmentForm(false);
+            setEditingDirectAssignmentRowId(null);
+          }}
+          onSuccess={() => {
+            setShowDirectAssignmentForm(false);
+            setEditingDirectAssignmentRowId(null);
+            loadDetail();
+          }}
+        />
       )}
     </div>
   );

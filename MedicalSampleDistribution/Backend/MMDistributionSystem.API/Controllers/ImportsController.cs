@@ -806,6 +806,115 @@ public class ImportsController : ControllerBase
         }
     }
 
+    [HttpGet("{importId}/criteria/{criteriaId}")]
+    public async Task<ActionResult> GetCriteria(int importId, int criteriaId)
+    {
+        try
+        {
+            _logger.LogInformation($"Getting criteria {criteriaId} for ImportId: {importId}");
+
+            await _context.Database.OpenConnectionAsync();
+
+            ConfigurationCriteriaDto? criteria = null;
+
+            // Obtener el criterio
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = @"
+                    SELECT
+                        RowId, TipoCliente, Campania, LugarVisita, Institucion,
+                        Especialidad, Edad, Sexo, EspecialidadSec, EspecialidadCartera,
+                        Categoria, Tarea, Frecuencia, Planificacion, Provincia,
+                        Tratamiento, ObjetosEntregados, Linea, AuditCategoria,
+                        AuditMercado, AuditProducto, AuditMolecula, PorcenDeAplic,
+                        UsuarioAlta
+                    FROM MigrationConfiguration
+                    WHERE ImportId = @importId AND RowId = @criteriaId AND FechaBaja IS NULL";
+
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@importId", importId));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@criteriaId", criteriaId));
+
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        criteria = new ConfigurationCriteriaDto
+                        {
+                            RowId = reader.GetInt32(0),
+                            TipoCliente = reader.IsDBNull(1) ? null : reader.GetString(1),
+                            Campania = reader.IsDBNull(2) ? null : reader.GetString(2),
+                            LugarVisita = reader.IsDBNull(3) ? null : reader.GetString(3),
+                            Institucion = reader.IsDBNull(4) ? null : reader.GetString(4),
+                            Especialidad = reader.IsDBNull(5) ? null : reader.GetString(5),
+                            Edad = reader.IsDBNull(6) ? null : reader.GetString(6),
+                            Sexo = reader.IsDBNull(7) ? null : reader.GetString(7),
+                            EspecialidadSec = reader.IsDBNull(8) ? null : reader.GetString(8),
+                            EspecialidadCartera = reader.IsDBNull(9) ? null : reader.GetString(9),
+                            Categoria = reader.IsDBNull(10) ? null : reader.GetString(10),
+                            Tarea = reader.IsDBNull(11) ? null : reader.GetString(11),
+                            Frecuencia = reader.IsDBNull(12) ? null : reader.GetInt32(12),
+                            Planificacion = reader.IsDBNull(13) ? null : reader.GetString(13),
+                            Provincia = reader.IsDBNull(14) ? null : reader.GetString(14),
+                            Tratamiento = reader.IsDBNull(15) ? null : reader.GetString(15),
+                            ObjetosEntregados = reader.IsDBNull(16) ? null : reader.GetString(16),
+                            Linea = reader.IsDBNull(17) ? null : reader.GetString(17),
+                            AuditCategoria = reader.IsDBNull(18) ? null : reader.GetString(18),
+                            AuditMercado = reader.IsDBNull(19) ? null : reader.GetString(19),
+                            AuditProducto = reader.IsDBNull(20) ? null : reader.GetString(20),
+                            AuditMolecula = reader.IsDBNull(21) ? null : reader.GetString(21),
+                            PorcenDeAplic = reader.IsDBNull(22) ? null : reader.GetInt32(22),
+                            UsuarioAlta = reader.IsDBNull(23) ? null : reader.GetString(23)
+                        };
+                    }
+                }
+            }
+
+            if (criteria == null)
+            {
+                await _context.Database.CloseConnectionAsync();
+                return NotFound("Criterio no encontrado");
+            }
+
+            // Obtener los productos del criterio
+            var products = new List<ProductAssignmentDto>();
+            using (var productsCommand = _context.Database.GetDbConnection().CreateCommand())
+            {
+                productsCommand.CommandText = @"
+                    SELECT CodigoSap, Value
+                    FROM MigrationAssignment
+                    WHERE ImportId = @importId AND RowId = @criteriaId AND Direct = 0";
+
+                productsCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@importId", importId));
+                productsCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@criteriaId", criteriaId));
+
+                using (var reader = await productsCommand.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        products.Add(new ProductAssignmentDto
+                        {
+                            CodigoSap = reader.GetString(0),
+                            Quantity = reader.GetInt32(1)
+                        });
+                    }
+                }
+            }
+
+            await _context.Database.CloseConnectionAsync();
+
+            return Ok(new
+            {
+                criteria,
+                products
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener criterio {CriteriaId} para ImportId {ImportId}", criteriaId, importId);
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
+
     [HttpGet("{importId}/criteria/{criteriaId}/materials")]
     public async Task<ActionResult<List<CriteriaMaterialDto>>> GetCriteriaMaterials(int importId, int criteriaId)
     {
@@ -818,18 +927,17 @@ public class ImportsController : ControllerBase
             {
                 command.CommandText = @"
                     SELECT DISTINCT
-                        MigrationConfiguration.RowId,
-                        Material.CodigoSap,
-                        Material.Description,
-                        ISNULL(MigrationAssignment.Value, 0) + MigrationAssignment.Direct AS Quantity
-                    FROM MigrationConfiguration
-                    INNER JOIN MigrationAssignment ON
-                        MigrationAssignment.ImportId = MigrationConfiguration.ImportId AND
-                        MigrationAssignment.RowId = MigrationConfiguration.RowId
-                    INNER JOIN Material ON Material.CodigoSap = MigrationAssignment.CodigoSap
-                    WHERE MigrationConfiguration.ImportId = @importId
-                        AND MigrationConfiguration.RowId = @criteriaId
-                        AND (ISNULL(MigrationAssignment.Value, 0) <> 0 OR MigrationAssignment.Direct <> 0)";
+                        MigrationAssignment.RowId,
+                        MigrationMaterial.CodigoSap,
+                        MigrationMaterial.Description,
+                        ISNULL(MigrationAssignment.Value, 0) AS Quantity
+                    FROM MigrationAssignment
+                    INNER JOIN MigrationMaterial ON
+                        MigrationMaterial.CodigoSap = MigrationAssignment.CodigoSap AND
+                        MigrationMaterial.ImportId = MigrationAssignment.ImportId
+                    WHERE MigrationAssignment.ImportId = @importId
+                        AND MigrationAssignment.RowId = @criteriaId
+                        AND MigrationAssignment.Direct = 0";
                 command.CommandType = System.Data.CommandType.Text;
 
                 var importIdParam = command.CreateParameter();
@@ -930,6 +1038,611 @@ public class ImportsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error al obtener materiales para asignación directa {AssignmentId} en marcación {ImportId}", assignmentId, importId);
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
+
+    [HttpPost("{importId}/criteria")]
+    public async Task<ActionResult> CreateCriteria(int importId, [FromBody] CreateCriteriaDto dto)
+    {
+        try
+        {
+            _logger.LogInformation($"Creating criteria for ImportId: {importId}");
+            _logger.LogInformation($"Products received: {dto.Products?.Count ?? 0}");
+            if (dto.Products != null)
+            {
+                foreach (var p in dto.Products)
+                {
+                    _logger.LogInformation($"  - Product: {p.CodigoSap}, Quantity: {p.Quantity}");
+                }
+            }
+
+            // Obtener el siguiente RowId como el máximo entre MigrationAssignment y MigrationConfiguration
+            int rowId;
+            await _context.Database.OpenConnectionAsync();
+
+            using (var maxCommand = _context.Database.GetDbConnection().CreateCommand())
+            {
+                maxCommand.CommandText = @"
+                    SELECT ISNULL(MAX(RowId), 0) + 1
+                    FROM (
+                        SELECT MAX(RowId) AS RowId FROM MigrationAssignment
+                        UNION ALL
+                        SELECT MAX(RowId) AS RowId FROM MigrationConfiguration
+                    ) AS Combined";
+                var maxRowIdObj = await maxCommand.ExecuteScalarAsync();
+                rowId = Convert.ToInt32(maxRowIdObj);
+            }
+
+            // Crear el criterio en MigrationConfiguration
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = @"
+                    INSERT INTO MigrationConfiguration (
+                        RowId, ImportId, TipoCliente, Campania, LugarVisita, Institucion,
+                        Especialidad, Edad, Sexo, EspecialidadSec, EspecialidadCartera,
+                        Categoria, Tarea, Frecuencia, Planificacion, Provincia,
+                        Tratamiento, ObjetosEntregados, Linea, AuditCategoria,
+                        AuditMercado, AuditProducto, AuditMolecula, PorcenDeAplic,
+                        FechaAlta, UsuarioAlta
+                    ) VALUES (
+                        @RowId, @ImportId, @TipoCliente, @Campania, @LugarVisita, @Institucion,
+                        @Especialidad, @Edad, @Sexo, @EspecialidadSec, @EspecialidadCartera,
+                        @Categoria, @Tarea, @Frecuencia, @Planificacion, @Provincia,
+                        @Tratamiento, @ObjetosEntregados, @Linea, @AuditCategoria,
+                        @AuditMercado, @AuditProducto, @AuditMolecula, @PorcenDeAplic,
+                        GETDATE(), @UsuarioAlta
+                    )";
+
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@RowId", rowId));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@ImportId", importId));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@TipoCliente", (object?)dto.TipoCliente ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Campania", (object?)dto.Campania ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@LugarVisita", (object?)dto.LugarVisita ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Institucion", (object?)dto.Institucion ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Especialidad", (object?)dto.Especialidad ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Edad", (object?)dto.Edad ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Sexo", (object?)dto.Sexo ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@EspecialidadSec", (object?)dto.EspecialidadSec ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@EspecialidadCartera", (object?)dto.EspecialidadCartera ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Categoria", (object?)dto.Categoria ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Tarea", (object?)dto.Tarea ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Frecuencia", (object?)dto.Frecuencia ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Planificacion", (object?)dto.Planificacion ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Provincia", (object?)dto.Provincia ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Tratamiento", (object?)dto.Tratamiento ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@ObjetosEntregados", (object?)dto.ObjetosEntregados ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Linea", (object?)dto.Linea ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@AuditCategoria", (object?)dto.AuditCategoria ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@AuditMercado", (object?)dto.AuditMercado ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@AuditProducto", (object?)dto.AuditProducto ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@AuditMolecula", (object?)dto.AuditMolecula ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@PorcenDeAplic", (object?)dto.PorcenDeAplic ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@UsuarioAlta", dto.UsuarioAlta));
+
+                await command.ExecuteNonQueryAsync();
+            }
+
+            // Insertar los productos asignados en MigrationAssignment
+            if (dto.Products != null && dto.Products.Any())
+            {
+                foreach (var product in dto.Products)
+                {
+                    using (var assignCommand = _context.Database.GetDbConnection().CreateCommand())
+                    {
+                        assignCommand.CommandText = @"
+                            INSERT INTO MigrationAssignment (
+                                CodigoSap, Value, ImportId, Direct, RowId
+                            ) VALUES (
+                                @CodigoSap, @Value, @ImportId, 0, @RowId
+                            )";
+
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@CodigoSap", product.CodigoSap));
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Value", product.Quantity));
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@ImportId", importId));
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@RowId", rowId));
+
+                        await assignCommand.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+
+            await _context.Database.CloseConnectionAsync();
+
+            _logger.LogInformation($"Created criteria with RowId: {rowId} and {dto.Products?.Count ?? 0} products");
+
+            return Ok(new { rowId, message = "Criterio creado exitosamente" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al crear criterio para ImportId {ImportId}", importId);
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
+
+    [HttpDelete("{importId}/criteria/{criteriaId}")]
+    public async Task<ActionResult> DeleteCriteria(int importId, int criteriaId)
+    {
+        try
+        {
+            _logger.LogInformation($"Deleting criteria {criteriaId} for ImportId: {importId}");
+
+            await _context.Database.OpenConnectionAsync();
+
+            // Verificar que la marcación esté en estado A o PA
+            string? importState = null;
+            using (var stateCommand = _context.Database.GetDbConnection().CreateCommand())
+            {
+                stateCommand.CommandText = "SELECT State FROM Import WHERE Id = @importId";
+                stateCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@importId", importId));
+
+                var stateResult = await stateCommand.ExecuteScalarAsync();
+                importState = stateResult?.ToString();
+            }
+
+            if (importState != "A" && importState != "PA")
+            {
+                await _context.Database.CloseConnectionAsync();
+                return BadRequest("Solo se pueden eliminar criterios en marcaciones con estado A (Abierta) o PA (Parcialmente Abierta)");
+            }
+
+            // Eliminar los productos asignados
+            using (var deleteAssignmentsCommand = _context.Database.GetDbConnection().CreateCommand())
+            {
+                deleteAssignmentsCommand.CommandText = @"
+                    DELETE FROM MigrationAssignment
+                    WHERE ImportId = @importId
+                        AND RowId = @criteriaId
+                        AND Direct = 0";
+                deleteAssignmentsCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@importId", importId));
+                deleteAssignmentsCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@criteriaId", criteriaId));
+                await deleteAssignmentsCommand.ExecuteNonQueryAsync();
+            }
+
+            // Eliminar el criterio (soft delete)
+            using (var deleteCriteriaCommand = _context.Database.GetDbConnection().CreateCommand())
+            {
+                deleteCriteriaCommand.CommandText = @"
+                    UPDATE MigrationConfiguration
+                    SET FechaBaja = GETDATE(), UsuarioBaja = 'ADMIN'
+                    WHERE ImportId = @importId AND RowId = @criteriaId AND FechaBaja IS NULL";
+                deleteCriteriaCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@importId", importId));
+                deleteCriteriaCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@criteriaId", criteriaId));
+
+                var rowsAffected = await deleteCriteriaCommand.ExecuteNonQueryAsync();
+
+                if (rowsAffected == 0)
+                {
+                    await _context.Database.CloseConnectionAsync();
+                    return NotFound("Criterio no encontrado");
+                }
+            }
+
+            await _context.Database.CloseConnectionAsync();
+
+            _logger.LogInformation($"Deleted criteria {criteriaId} for ImportId {importId}");
+            return Ok(new { message = "Criterio eliminado exitosamente" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al eliminar criterio {CriteriaId} para ImportId {ImportId}", criteriaId, importId);
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
+
+    [HttpPut("{importId}/criteria/{criteriaId}")]
+    public async Task<ActionResult> UpdateCriteria(int importId, int criteriaId, [FromBody] CreateCriteriaDto dto)
+    {
+        try
+        {
+            _logger.LogInformation($"Updating criteria {criteriaId} for ImportId: {importId}");
+
+            await _context.Database.OpenConnectionAsync();
+
+            // Verificar que la marcación esté en estado A o PA
+            string? importState = null;
+            using (var stateCommand = _context.Database.GetDbConnection().CreateCommand())
+            {
+                stateCommand.CommandText = "SELECT State FROM Import WHERE Id = @importId";
+                stateCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@importId", importId));
+
+                var stateResult = await stateCommand.ExecuteScalarAsync();
+                importState = stateResult?.ToString();
+            }
+
+            if (importState != "A" && importState != "PA")
+            {
+                await _context.Database.CloseConnectionAsync();
+                return BadRequest("Solo se pueden editar criterios en marcaciones con estado A (Abierta) o PA (Parcialmente Abierta)");
+            }
+
+            // Actualizar el criterio en MigrationConfiguration
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = @"
+                    UPDATE MigrationConfiguration SET
+                        TipoCliente = @TipoCliente,
+                        Campania = @Campania,
+                        LugarVisita = @LugarVisita,
+                        Institucion = @Institucion,
+                        Especialidad = @Especialidad,
+                        Edad = @Edad,
+                        Sexo = @Sexo,
+                        EspecialidadSec = @EspecialidadSec,
+                        EspecialidadCartera = @EspecialidadCartera,
+                        Categoria = @Categoria,
+                        Tarea = @Tarea,
+                        Frecuencia = @Frecuencia,
+                        Planificacion = @Planificacion,
+                        Provincia = @Provincia,
+                        Tratamiento = @Tratamiento,
+                        ObjetosEntregados = @ObjetosEntregados,
+                        Linea = @Linea,
+                        AuditCategoria = @AuditCategoria,
+                        AuditMercado = @AuditMercado,
+                        AuditProducto = @AuditProducto,
+                        AuditMolecula = @AuditMolecula,
+                        PorcenDeAplic = @PorcenDeAplic,
+                        FechaModificacion = GETDATE(),
+                        UsuarioModificacion = @UsuarioAlta
+                    WHERE ImportId = @ImportId AND RowId = @RowId AND FechaBaja IS NULL";
+
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@RowId", criteriaId));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@ImportId", importId));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@TipoCliente", (object?)dto.TipoCliente ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Campania", (object?)dto.Campania ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@LugarVisita", (object?)dto.LugarVisita ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Institucion", (object?)dto.Institucion ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Especialidad", (object?)dto.Especialidad ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Edad", (object?)dto.Edad ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Sexo", (object?)dto.Sexo ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@EspecialidadSec", (object?)dto.EspecialidadSec ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@EspecialidadCartera", (object?)dto.EspecialidadCartera ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Categoria", (object?)dto.Categoria ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Tarea", (object?)dto.Tarea ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Frecuencia", (object?)dto.Frecuencia ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Planificacion", (object?)dto.Planificacion ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Provincia", (object?)dto.Provincia ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Tratamiento", (object?)dto.Tratamiento ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@ObjetosEntregados", (object?)dto.ObjetosEntregados ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Linea", (object?)dto.Linea ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@AuditCategoria", (object?)dto.AuditCategoria ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@AuditMercado", (object?)dto.AuditMercado ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@AuditProducto", (object?)dto.AuditProducto ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@AuditMolecula", (object?)dto.AuditMolecula ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@PorcenDeAplic", (object?)dto.PorcenDeAplic ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@UsuarioAlta", dto.UsuarioAlta));
+
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+
+                if (rowsAffected == 0)
+                {
+                    await _context.Database.CloseConnectionAsync();
+                    return NotFound("Criterio no encontrado");
+                }
+            }
+
+            // Eliminar los productos actuales
+            using (var deleteProductsCommand = _context.Database.GetDbConnection().CreateCommand())
+            {
+                deleteProductsCommand.CommandText = @"
+                    DELETE FROM MigrationAssignment
+                    WHERE ImportId = @ImportId AND RowId = @RowId AND Direct = 0";
+                deleteProductsCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@ImportId", importId));
+                deleteProductsCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@RowId", criteriaId));
+                await deleteProductsCommand.ExecuteNonQueryAsync();
+            }
+
+            // Insertar los nuevos productos
+            if (dto.Products != null && dto.Products.Any())
+            {
+                foreach (var product in dto.Products)
+                {
+                    using (var assignCommand = _context.Database.GetDbConnection().CreateCommand())
+                    {
+                        assignCommand.CommandText = @"
+                            INSERT INTO MigrationAssignment (
+                                CodigoSap, Value, ImportId, Direct, RowId
+                            ) VALUES (
+                                @CodigoSap, @Value, @ImportId, 0, @RowId
+                            )";
+
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@CodigoSap", product.CodigoSap));
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Value", product.Quantity));
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@ImportId", importId));
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@RowId", criteriaId));
+
+                        await assignCommand.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+
+            await _context.Database.CloseConnectionAsync();
+
+            _logger.LogInformation($"Updated criteria {criteriaId} with {dto.Products?.Count ?? 0} products");
+            return Ok(new { message = "Criterio actualizado exitosamente" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al actualizar criterio {CriteriaId} para ImportId {ImportId}", criteriaId, importId);
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
+
+    [HttpPost("{importId}/direct-assignment")]
+    public async Task<ActionResult> CreateDirectAssignment(int importId, [FromBody] CreateDirectAssignmentDto dto)
+    {
+        try
+        {
+            _logger.LogInformation($"Creating direct assignment for ImportId: {importId}");
+
+            // Validar que solo Supervisor O Representante esté seleccionado
+            bool hasSupervisor = !string.IsNullOrWhiteSpace(dto.Supervisor);
+            bool hasRepresentante = !string.IsNullOrWhiteSpace(dto.Representante);
+
+            if (hasSupervisor && hasRepresentante)
+            {
+                return BadRequest("Solo se puede seleccionar Supervisor O Representante, no ambos");
+            }
+
+            if (!hasSupervisor && !hasRepresentante)
+            {
+                return BadRequest("Debe seleccionar al menos un Supervisor o un Representante");
+            }
+
+            // Validar que haya al menos un producto
+            if (dto.Products == null || !dto.Products.Any())
+            {
+                return BadRequest("Debe seleccionar al menos un material");
+            }
+
+            _logger.LogInformation($"Products received: {dto.Products?.Count ?? 0}");
+
+            // Obtener el siguiente RowId
+            int rowId;
+            await _context.Database.OpenConnectionAsync();
+
+            using (var maxCommand = _context.Database.GetDbConnection().CreateCommand())
+            {
+                maxCommand.CommandText = @"
+                    SELECT ISNULL(MAX(RowId), 0) + 1
+                    FROM (
+                        SELECT MAX(RowId) AS RowId FROM MigrationDirect WHERE RowId IS NOT NULL
+                        UNION ALL
+                        SELECT MAX(RowId) AS RowId FROM MigrationConfiguration WHERE RowId IS NOT NULL
+                        UNION ALL
+                        SELECT MAX(RowId) AS RowId FROM MigrationAssignment WHERE RowId IS NOT NULL
+                    ) AS Combined";
+                var maxRowIdObj = await maxCommand.ExecuteScalarAsync();
+                rowId = Convert.ToInt32(maxRowIdObj);
+            }
+
+            // Crear el registro en MigrationDirect
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = @"
+                    INSERT INTO MigrationDirect (
+                        Supervisor, LegajoSupervisor, Representante, LegajoRepresentante,
+                        Excluded, ImportId, RowId, FechaAlta, UsuarioAlta,
+                        FechaModificacion, UsuarioModificacion
+                    ) VALUES (
+                        @Supervisor, @LegajoSupervisor, @Representante, @LegajoRepresentante,
+                        @Excluded, @ImportId, @RowId, GETDATE(), @UsuarioAlta,
+                        GETDATE(), @UsuarioModificacion
+                    )";
+
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Supervisor", (object?)dto.Supervisor ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@LegajoSupervisor", (object?)dto.LegajoSupervisor ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Representante", (object?)dto.Representante ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@LegajoRepresentante", (object?)dto.LegajoRepresentante ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Excluded", (object?)dto.Excluded ?? DBNull.Value));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@ImportId", importId));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@RowId", rowId));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@UsuarioAlta", dto.UsuarioAlta));
+                command.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@UsuarioModificacion", dto.UsuarioAlta));
+
+                await command.ExecuteNonQueryAsync();
+            }
+
+            // Insertar los productos asignados en MigrationAssignment con Direct = 1
+            if (dto.Products != null && dto.Products.Any())
+            {
+                foreach (var product in dto.Products)
+                {
+                    using (var assignCommand = _context.Database.GetDbConnection().CreateCommand())
+                    {
+                        assignCommand.CommandText = @"
+                            INSERT INTO MigrationAssignment (
+                                CodigoSap, Value, ImportId, Direct, RowId
+                            ) VALUES (
+                                @CodigoSap, @Value, @ImportId, 1, @RowId
+                            )";
+
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@CodigoSap", product.CodigoSap));
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@Value", product.Quantity));
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@ImportId", importId));
+                        assignCommand.Parameters.Add(new Microsoft.Data.SqlClient.SqlParameter("@RowId", rowId));
+
+                        await assignCommand.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+
+            await _context.Database.CloseConnectionAsync();
+
+            _logger.LogInformation($"Created direct assignment with RowId: {rowId} and {dto.Products?.Count ?? 0} products");
+
+            return Ok(new { rowId, message = "Asignación directa creada exitosamente" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al crear asignación directa para ImportId {ImportId}", importId);
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
+
+    /// <summary>
+    /// GET: api/imports/{importId}/direct-assignment/{rowId}
+    /// Get a direct assignment by RowId for editing
+    /// </summary>
+    [HttpGet("{importId}/direct-assignment/{rowId}")]
+    public async Task<ActionResult<DirectAssignmentDetailDto>> GetDirectAssignment(int importId, int rowId)
+    {
+        try
+        {
+            // Get the direct assignment
+            var directAssignment = await _context.MigrationDirects
+                .FirstOrDefaultAsync(d => d.ImportId == importId && d.RowId == rowId && d.FechaBaja == null);
+
+            if (directAssignment == null)
+            {
+                return NotFound("Asignación directa no encontrada");
+            }
+
+            // Get the materials for this assignment
+            var materials = await _context.MigrationAssignments
+                .Where(a => a.RowId == rowId && a.Direct == 1)
+                .Select(a => new ProductQuantityDto
+                {
+                    CodigoSap = a.CodigoSap ?? string.Empty,
+                    Quantity = a.Value ?? 0
+                })
+                .ToListAsync();
+
+            var result = new DirectAssignmentDetailDto
+            {
+                Supervisor = directAssignment.Supervisor,
+                LegajoSupervisor = directAssignment.LegajoSupervisor,
+                Representante = directAssignment.Representante,
+                LegajoRepresentante = directAssignment.LegajoRepresentante,
+                Excluded = directAssignment.Excluded,
+                Products = materials
+            };
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting direct assignment");
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
+
+    /// <summary>
+    /// PUT: api/imports/{importId}/direct-assignment/{rowId}
+    /// Update a direct assignment
+    /// </summary>
+    [HttpPut("{importId}/direct-assignment/{rowId}")]
+    public async Task<ActionResult> UpdateDirectAssignment(int importId, int rowId, [FromBody] CreateDirectAssignmentDto dto)
+    {
+        try
+        {
+            // Validation: Only Supervisor OR Representative
+            bool hasSupervisor = !string.IsNullOrWhiteSpace(dto.Supervisor);
+            bool hasRepresentante = !string.IsNullOrWhiteSpace(dto.Representante);
+
+            if (hasSupervisor && hasRepresentante)
+            {
+                return BadRequest("Solo se puede seleccionar Supervisor O Representante, no ambos");
+            }
+
+            if (!hasSupervisor && !hasRepresentante)
+            {
+                return BadRequest("Debe seleccionar al menos un Supervisor o un Representante");
+            }
+
+            // Validate materials
+            if (dto.Products == null || !dto.Products.Any())
+            {
+                return BadRequest("Debe seleccionar al menos un material");
+            }
+
+            // Get the existing direct assignment
+            var existingDirect = await _context.MigrationDirects
+                .FirstOrDefaultAsync(d => d.ImportId == importId && d.RowId == rowId && d.FechaBaja == null);
+
+            if (existingDirect == null)
+            {
+                return NotFound("Asignación directa no encontrada");
+            }
+
+            // Update the direct assignment
+            existingDirect.Supervisor = dto.Supervisor;
+            existingDirect.LegajoSupervisor = dto.LegajoSupervisor;
+            existingDirect.Representante = dto.Representante;
+            existingDirect.LegajoRepresentante = dto.LegajoRepresentante;
+            existingDirect.Excluded = dto.Excluded;
+            existingDirect.UsuarioModificacion = dto.UsuarioAlta ?? "System";
+            existingDirect.FechaModificacion = DateTime.Now;
+
+            // Delete existing materials
+            var existingMaterials = await _context.MigrationAssignments
+                .Where(a => a.RowId == rowId && a.Direct == 1)
+                .ToListAsync();
+
+            _context.MigrationAssignments.RemoveRange(existingMaterials);
+
+            // Add new materials
+            foreach (var product in dto.Products)
+            {
+                var assignment = new MigrationAssignment
+                {
+                    ImportId = importId,
+                    RowId = rowId,
+                    CodigoSap = product.CodigoSap,
+                    Value = product.Quantity,
+                    Direct = 1
+                };
+                await _context.MigrationAssignments.AddAsync(assignment);
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok("Asignación directa actualizada exitosamente");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating direct assignment");
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
+
+    /// <summary>
+    /// DELETE: api/imports/{importId}/direct-assignment/{rowId}
+    /// Soft delete a direct assignment and its materials
+    /// </summary>
+    [HttpDelete("{importId}/direct-assignment/{rowId}")]
+    public async Task<ActionResult> DeleteDirectAssignment(int importId, int rowId)
+    {
+        try
+        {
+            // Get the direct assignment
+            var directAssignment = await _context.MigrationDirects
+                .FirstOrDefaultAsync(d => d.ImportId == importId && d.RowId == rowId && d.FechaBaja == null);
+
+            if (directAssignment == null)
+            {
+                return NotFound("Asignación directa no encontrada");
+            }
+
+            // Soft delete the direct assignment
+            directAssignment.FechaBaja = DateTime.Now;
+            directAssignment.UsuarioBaja = "System";
+
+            // Delete all associated materials
+            var materials = await _context.MigrationAssignments
+                .Where(a => a.RowId == rowId && a.Direct == 1)
+                .ToListAsync();
+
+            _context.MigrationAssignments.RemoveRange(materials);
+
+            await _context.SaveChangesAsync();
+
+            return Ok("Asignación directa eliminada exitosamente");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting direct assignment");
             return StatusCode(500, "Error interno del servidor");
         }
     }
