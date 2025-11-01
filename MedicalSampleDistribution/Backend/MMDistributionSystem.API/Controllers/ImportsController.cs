@@ -869,4 +869,68 @@ public class ImportsController : ControllerBase
             return StatusCode(500, "Error interno del servidor");
         }
     }
+
+    [HttpGet("{importId}/assignments/{assignmentId}/materials")]
+    public async Task<ActionResult<List<CriteriaMaterialDto>>> GetAssignmentMaterials(int importId, int assignmentId)
+    {
+        try
+        {
+            _logger.LogInformation($"Getting materials for ImportId: {importId}, AssignmentId: {assignmentId}");
+
+            var materials = new List<CriteriaMaterialDto>();
+            using (var command = _context.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = @"
+                    SELECT DISTINCT
+                        MigrationDirect.RowId,
+                        Material.CodigoSap,
+                        Material.Description,
+                        ISNULL(MigrationAssignment.Value, 0) + MigrationAssignment.Direct AS Quantity
+                    FROM MigrationDirect
+                    INNER JOIN MigrationAssignment ON
+                        MigrationAssignment.ImportId = MigrationDirect.ImportId AND
+                        MigrationAssignment.RowId = MigrationDirect.RowId
+                    INNER JOIN Material ON Material.CodigoSap = MigrationAssignment.CodigoSap
+                    WHERE MigrationDirect.ImportId = @importId
+                        AND MigrationDirect.RowId = @assignmentId
+                        AND (MigrationAssignment.Direct <> 0 OR ISNULL(MigrationAssignment.Value, 0) <> 0)";
+                command.CommandType = System.Data.CommandType.Text;
+
+                var importIdParam = command.CreateParameter();
+                importIdParam.ParameterName = "@importId";
+                importIdParam.Value = importId;
+                command.Parameters.Add(importIdParam);
+
+                var assignmentIdParam = command.CreateParameter();
+                assignmentIdParam.ParameterName = "@assignmentId";
+                assignmentIdParam.Value = assignmentId;
+                command.Parameters.Add(assignmentIdParam);
+
+                await _context.Database.OpenConnectionAsync();
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        materials.Add(new CriteriaMaterialDto
+                        {
+                            RowId = reader.GetInt32(0),
+                            CodigoSap = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                            Description = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                            Quantity = reader.IsDBNull(3) ? 0 : reader.GetInt32(3)
+                        });
+                    }
+                }
+                await _context.Database.CloseConnectionAsync();
+            }
+
+            _logger.LogInformation($"Retrieved {materials.Count} materials for assignment {assignmentId}");
+
+            return Ok(materials);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener materiales para asignación directa {AssignmentId} en marcación {ImportId}", assignmentId, importId);
+            return StatusCode(500, "Error interno del servidor");
+        }
+    }
 }

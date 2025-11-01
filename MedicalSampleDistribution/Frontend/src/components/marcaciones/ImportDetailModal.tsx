@@ -26,6 +26,10 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
   const [criteriaMaterials, setCriteriaMaterials] = useState<CriteriaMaterial[]>([]);
   const [loadingMaterials, setLoadingMaterials] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [assignmentViewMode, setAssignmentViewMode] = useState<'list' | 'grid'>('list');
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<number | null>(null);
+  const [assignmentMaterials, setAssignmentMaterials] = useState<CriteriaMaterial[]>([]);
+  const [loadingAssignmentMaterials, setLoadingAssignmentMaterials] = useState(false);
   const { addNotification } = useNotifications();
 
   useEffect(() => {
@@ -87,6 +91,31 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
     }
   };
 
+  const loadAssignmentMaterials = async (assignmentRowId: number) => {
+    try {
+      console.log('Loading materials for assignmentRowId:', assignmentRowId);
+      setLoadingAssignmentMaterials(true);
+      const url = `http://localhost:5001/api/imports/${importId}/assignments/${assignmentRowId}/materials`;
+      console.log('Fetching from URL:', url);
+      const response = await fetch(url);
+      console.log('Response status:', response.status);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error('Error al cargar materiales');
+      }
+      const data = await response.json();
+      console.log('Assignment materials loaded:', data);
+      setAssignmentMaterials(data);
+      setSelectedAssignmentId(assignmentRowId);
+    } catch (error) {
+      addNotification('Error al cargar materiales de la asignación', 'error');
+      console.error('Error loading assignment materials:', error);
+    } finally {
+      setLoadingAssignmentMaterials(false);
+    }
+  };
+
   const getFieldIcon = (field: string): string => {
     const iconMap: Record<string, string> = {
       tipoCliente: 'person',
@@ -138,6 +167,18 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
     if (criteria.auditMercado) fields.push({ label: 'Audit Mercado', value: criteria.auditMercado, icon: 'store', key: 'auditMercado' });
     if (criteria.auditProducto) fields.push({ label: 'Audit Producto', value: criteria.auditProducto, icon: 'inventory', key: 'auditProducto' });
     if (criteria.auditMolecula) fields.push({ label: 'Audit Molécula', value: criteria.auditMolecula, icon: 'science', key: 'auditMolecula' });
+
+    return fields;
+  };
+
+  const getAssignmentFields = (assignment: any) => {
+    const fields: Array<{ label: string; value: any; icon: string; key: string }> = [];
+
+    if (assignment.supervisor) fields.push({ label: 'Supervisor', value: assignment.supervisor, icon: 'supervisor_account', key: 'supervisor' });
+    if (assignment.legajoSupervisor) fields.push({ label: 'Leg. Supervisor', value: assignment.legajoSupervisor, icon: 'badge', key: 'legajoSupervisor' });
+    if (assignment.representante) fields.push({ label: 'Representante', value: assignment.representante, icon: 'person', key: 'representante' });
+    if (assignment.legajoRepresentante) fields.push({ label: 'Leg. Representante', value: assignment.legajoRepresentante, icon: 'badge', key: 'legajoRepresentante' });
+    if (assignment.excluded) fields.push({ label: 'Excluido', value: assignment.excluded, icon: 'block', key: 'excluded' });
 
     return fields;
   };
@@ -410,30 +451,125 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
               {detail.directAssignments.length === 0 ? (
                 <div className="no-data">No hay asignaciones directas</div>
               ) : (
-                <div className="table-container">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Supervisor</th>
-                        <th>Legajo Supervisor</th>
-                        <th>Representante</th>
-                        <th>Legajo Representante</th>
-                        <th>Excluido</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detail.directAssignments.map((assignment) => (
-                        <tr key={assignment.id}>
-                          <td>{renderValue(assignment.supervisor)}</td>
-                          <td>{renderValue(assignment.legajoSupervisor)}</td>
-                          <td><strong>{renderValue(assignment.representante)}</strong></td>
-                          <td>{renderValue(assignment.legajoRepresentante)}</td>
-                          <td>{renderValue(assignment.excluded)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  <div className="view-mode-toolbar">
+                    <button
+                      className={`btn-view-mode ${assignmentViewMode === 'list' ? 'active' : ''}`}
+                      onClick={() => setAssignmentViewMode('list')}
+                    >
+                      <span className="material-icons">view_list</span>
+                      Lista
+                    </button>
+                    <button
+                      className={`btn-view-mode ${assignmentViewMode === 'grid' ? 'active' : ''}`}
+                      onClick={() => setAssignmentViewMode('grid')}
+                    >
+                      <span className="material-icons">view_module</span>
+                      Mosaico
+                    </button>
+                  </div>
+                  <div className="tab-content-inner">
+                    {assignmentViewMode === 'list' ? (
+                      <table className="criteria-table">
+                        <thead>
+                          <tr>
+                            <th>RowId</th>
+                            <th>Representante</th>
+                            <th>Datos</th>
+                            <th className="text-center">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detail.directAssignments.map((assignment) => {
+                            const fields = getAssignmentFields(assignment);
+                            return (
+                              <tr key={assignment.id}>
+                                <td>
+                                  <span className="criteria-number-compact">#{assignment.rowId}</span>
+                                </td>
+                                <td>
+                                  {assignment.representante && (
+                                    <span className="criteria-user-badge">
+                                      <span className="material-icons">person</span>
+                                      {assignment.representante}
+                                    </span>
+                                  )}
+                                </td>
+                                <td>
+                                  <div className="criteria-badges-inline">
+                                    {fields.map((field) => (
+                                      <div key={field.key} className="criteria-badge-small">
+                                        <span className="material-icons badge-icon-small">{field.icon}</span>
+                                        <span className="badge-content-small">
+                                          <span className="badge-label-small">{field.label}:</span>
+                                          <span className="badge-value-small">{field.value}</span>
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="text-center">
+                                  <button
+                                    className="btn-view-materials-small"
+                                    onClick={() => {
+                                      console.log('Button clicked! RowId:', assignment.rowId);
+                                      loadAssignmentMaterials(assignment.rowId!);
+                                    }}
+                                    title="Ver materiales asignados"
+                                  >
+                                    <span className="material-icons">inventory_2</span>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="criteria-grid-compact">
+                        {detail.directAssignments.map((assignment) => {
+                          const fields = getAssignmentFields(assignment);
+                          return (
+                            <div key={assignment.id} className="criteria-row">
+                              <div className="criteria-row-header">
+                                <div className="criteria-row-header-left">
+                                  <span className="criteria-number">#{assignment.rowId}</span>
+                                  {assignment.representante && (
+                                    <span className="criteria-user-badge">
+                                      <span className="material-icons">person</span>
+                                      {assignment.representante}
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  className="btn-view-materials-small"
+                                  onClick={() => {
+                                    console.log('Button clicked (Grid)! RowId:', assignment.rowId);
+                                    loadAssignmentMaterials(assignment.rowId!);
+                                  }}
+                                  title="Ver materiales asignados"
+                                >
+                                  <span className="material-icons">inventory_2</span>
+                                </button>
+                              </div>
+                              <div className="criteria-badges">
+                                {fields.map((field) => (
+                                  <div key={field.key} className="criteria-badge">
+                                    <span className="material-icons badge-icon">{field.icon}</span>
+                                    <span className="badge-content">
+                                      <span className="badge-label">{field.label}:</span>
+                                      <span className="badge-value">{field.value}</span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -492,7 +628,7 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
         </div>
       </div>
 
-      {/* Materials Modal */}
+      {/* Criteria Materials Modal */}
       {selectedCriteriaId && (
         <div className="modal-overlay modal-secondary" onClick={() => setSelectedCriteriaId(null)}>
           <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
@@ -545,6 +681,66 @@ export default function ImportDetailModal({ importId, onClose }: ImportDetailMod
 
             <div className="modal-footer">
               <button onClick={() => setSelectedCriteriaId(null)} className="btn-secondary">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assignment Materials Modal */}
+      {selectedAssignmentId && (
+        <div className="modal-overlay modal-secondary" onClick={() => setSelectedAssignmentId(null)}>
+          <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Materiales de la Asignación</h3>
+                <p className="modal-subtitle">Asignación RowId: {selectedAssignmentId}</p>
+              </div>
+              <button onClick={() => setSelectedAssignmentId(null)} className="btn-close">
+                <span className="material-icons">close</span>
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {loadingAssignmentMaterials ? (
+                <div className="loading">Cargando materiales...</div>
+              ) : assignmentMaterials.length === 0 ? (
+                <div className="no-data">No hay materiales asignados a esta asignación directa</div>
+              ) : (
+                <>
+                  <div className="materials-scorecard">
+                    <div className="scorecard-icon">
+                      <span className="material-icons">inventory_2</span>
+                    </div>
+                    <div className="scorecard-content">
+                      <div className="scorecard-label">Total de Productos</div>
+                      <div className="scorecard-value">{assignmentMaterials.length}</div>
+                    </div>
+                  </div>
+                  <div className="materials-list-compact">
+                    {assignmentMaterials.map((material) => {
+                      console.log('Assignment Material:', material.codigoSap, 'Quantity:', material.quantity);
+                      return (
+                        <div key={material.codigoSap} className="material-item-compact">
+                          <span className="material-icons material-item-icon">inventory_2</span>
+                          <div className="material-item-content">
+                            <div className="material-code">{material.codigoSap}</div>
+                            <div className="material-description">{material.description}</div>
+                          </div>
+                          <div className="material-quantity">
+                            <span className="quantity-value">{material.quantity || 0}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button onClick={() => setSelectedAssignmentId(null)} className="btn-secondary">
                 Cerrar
               </button>
             </div>
